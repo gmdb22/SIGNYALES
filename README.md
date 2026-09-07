@@ -3,10 +3,14 @@ An Edge AI-Powered Bimanual Smart Glove System for Filipino Sign Language Recogn
 
 fuck me 
 
----------------------------------------------------
+# -------------------------------------------------
+
 # I think you guys know the rules, never push to the main branch, before you start editing create your own branch to edit there blah blah blah blah blah 
 # Also make sure u have python n git installed n shit sa vscode basta yon nakaano naman ata yung kelangan mainstall sa requirements.txt
+# also brah iam just clauding the fuck outta this
+
 # -------------------------------------------------
+
 SETUP INSTRUCTIONS 
 1. Clone the REPO 
 git clone <repo url>
