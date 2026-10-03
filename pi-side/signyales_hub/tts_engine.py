@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Text-to-Speech
+Signyales Pi-Side App — Text-to-Speech
 
 Offline-only, by project requirement — no cloud TTS APIs. Uses
 pyttsx3 (which drives espeak/espeak-ng under the hood on Linux) as the

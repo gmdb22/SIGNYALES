@@ -1,0 +1,20 @@
+{
+  "folders": [
+    { "name": "Glove Firmware", "path": "firmware/glove" },
+    { "name": "Receiver Firmware", "path": "firmware/receiver" },
+    { "name": "MAC Address Utility", "path": "firmware/tools/get_mac_address" },
+    { "name": "Pi-Side App", "path": "pi-side" },
+    { "name": "Training Pipeline", "path": "training" },
+    { "name": "Docs", "path": "docs" }
+  ],
+  "settings": {
+    "python.analysis.autoImportCompletions": true
+  },
+  "extensions": {
+    "recommendations": [
+      "platformio.platformio-ide",
+      "ms-python.python",
+      "ms-python.vscode-pylance"
+    ]
+  }
+}

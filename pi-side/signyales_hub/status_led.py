@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Status LED (optional)
+Signyales Pi-Side App — Status LED (optional)
 
 A simple visual "system is recognizing gestures" indicator for
 demos, so nobody needs a laptop screen visible to confirm the system

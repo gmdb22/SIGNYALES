@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Configuration
+Signyales Pi-Side App — Configuration
 
 Target hardware: Raspberry Pi 5 (4GB), Raspberry Pi OS Bookworm (64-bit).
 All tunables live here so nothing downstream needs code changes when a

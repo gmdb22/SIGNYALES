@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Main Application
+Signyales Pi-Side App — Main Application
 
 Layer 3 of the pipeline: gloves -> receiver -> **Pi hub** -> text/speech.
 Target hardware: Raspberry Pi 5 (4GB), Raspberry Pi OS Bookworm (64-bit).
@@ -27,6 +27,7 @@ from .model_runtime import GestureClassifier
 from .gesture_debounce import GestureDebouncer
 from .tts_engine import TTSEngine
 from .status_led import StatusLed
+from .subtitle_display import SubtitleDisplay
 
 log = logging.getLogger("signyales.main")
 
@@ -39,16 +40,33 @@ def parse_args():
     p.add_argument("--simulate", action="store_true",
                     help="Use synthetic frames instead of a real serial link (no hardware needed)")
     p.add_argument("--no-tts", action="store_true", help="Print gestures but don't speak them")
+    p.add_argument("--subtitle", action="store_true",
+                    help="Show recognized gestures as large fullscreen text, for demo use. "
+                         "When on, logging is redirected to signyales.log instead of the "
+                         "terminal, so it doesn't fight with the fullscreen display for the "
+                         "same screen space.")
     p.add_argument("-v", "--verbose", action="store_true", help="Debug-level logging")
     return p.parse_args()
 
 
 def main():
     args = parse_args()
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    )
+
+    if args.subtitle:
+        # The fullscreen display owns the terminal's visible output —
+        # logging to stdout at the same time would get wiped by every
+        # screen clear, or flash messily between clears. Route it to a
+        # file instead so diagnostics are still captured for later.
+        logging.basicConfig(
+            level=logging.DEBUG if args.verbose else logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            filename="signyales.log",
+        )
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG if args.verbose else logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
 
     cfg = HubConfig()
     if args.port:
@@ -63,6 +81,10 @@ def main():
     tts = TTSEngine() if not args.no_tts else None
     led = StatusLed(cfg.status_led_pin, cfg.status_led_enabled)
     window = WindowBuffer(cfg.window_size_samples, cfg.feature_count)
+
+    subtitle = SubtitleDisplay() if args.subtitle else None
+    if subtitle:
+        subtitle.show_idle()
 
     if args.simulate:
         log.info("Running in --simulate mode: synthetic frames, no hardware required")
@@ -104,7 +126,11 @@ def main():
 
             stable_label = debouncer.update(label, confidence)
             if stable_label:
-                print(f"[gesture] {stable_label}")
+                if subtitle:
+                    subtitle.show(stable_label)
+                else:
+                    print(f"[gesture] {stable_label}")
+                log.info("Recognized gesture: %s", stable_label)
                 if tts:
                     tts.speak(stable_label)
 

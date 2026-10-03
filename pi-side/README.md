@@ -1,4 +1,4 @@
-# Signyales — Raspberry Pi Hub Application
+# Signyales — Raspberry Pi Application
 
 Layer 3 of the pipeline: gloves → receiver dongle → **Pi hub** → text/speech.
 Target hardware: **Raspberry Pi 5 (4GB)**, Raspberry Pi OS Bookworm (64-bit).
@@ -97,6 +97,20 @@ structure.
 ```
 python -m signyales_hub.main --port /dev/serial0 --baud 460800 --model-dir model
 ```
+
+Add `--subtitle` for large, fullscreen text output during a demo — this is
+the proposal's "visible text output" requirement, deliberately kept to
+plain large text with no GUI elements, buttons, or windows, matching the
+proposal's "console or LED-based" scope language:
+
+```
+python -m signyales_hub.main --port /dev/serial0 --model-dir model --subtitle
+```
+
+When `--subtitle` is on, logging is redirected to `signyales.log` instead
+of the terminal, since the fullscreen display and scrolling log text can't
+both use the same screen space. Check that file, not the terminal, if you
+need to debug a run started with this flag.
 
 ## The model artifact contract
 

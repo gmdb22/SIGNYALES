@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Inference Benchmark
+Signyales Pi-Side App — Inference Benchmark
 
 Measures how long a single model.predict() call actually takes on
 this Pi 5, using random data shaped like a real window. Use this once

@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Gesture Debouncing
+Signyales Pi-Side App — Gesture Debouncing
 
 Raw model predictions run several times a second and will naturally
 flicker between adjacent gestures, especially mid-transition. This

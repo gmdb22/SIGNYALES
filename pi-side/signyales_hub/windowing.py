@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Windowing
+Signyales Pi-Side App — Windowing
 
 Turns a stream of parsed frames into fixed-size (window_size x
 feature_count) arrays for the TinyML model, using the feature layout

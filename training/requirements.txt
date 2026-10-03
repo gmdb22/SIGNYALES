@@ -1,0 +1,9 @@
+# Signyales Training — dependencies
+# Run this on a laptop/desktop, not the Pi — training doesn't need to
+# happen on the deployment hardware.
+
+numpy>=1.24
+tensorflow>=2.15
+scikit-learn>=1.3
+matplotlib>=3.7
+jupyter>=1.0

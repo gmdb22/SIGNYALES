@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Serial Link
+Signyales Pi-Side App — Serial Link
 
 Parses the combined_frame_t stream produced by the receiver dongle
 (see receiver_firmware/frame.h). This struct format string is the

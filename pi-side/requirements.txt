@@ -1,4 +1,4 @@
-# Signyales Pi Hub — dependencies
+# Signyales Pi-Side — dependencies
 # Target: Raspberry Pi 5 (4GB), Raspberry Pi OS Bookworm (64-bit), Python 3.11
 
 pyserial>=3.5
@@ -19,8 +19,17 @@ pyttsx3>=2.90
 # pyttsx3 drives espeak/espeak-ng under the hood on Linux — install the
 # system package too:  sudo apt install espeak-ng
 
+# --- Subtitle display (optional) ---
+# Only used by --subtitle for large fullscreen text. subtitle_display.py
+# degrades to a simpler built-in fallback if this isn't installed, so it's
+# not a hard requirement for running the app at all.
+pyfiglet>=1.0
+
 # --- Status LED (optional) ---
 # RPi.GPIO does not reliably support the Pi 5's RP1 I/O chip. gpiozero
-# + lgpio is the supported path on Pi 5.
+# + lgpio is the supported path on Pi 5. lgpio only builds on Linux (it
+# wraps real GPIO hardware), so it's marked Linux-only below — pip will
+# correctly skip it on Windows/Mac dev machines and install it on the
+# actual Raspberry Pi automatically, no manual flag needed either way.
 gpiozero>=2.0
-lgpio>=0.2.2.0
+lgpio>=0.2.2.0 ; sys_platform == "linux"

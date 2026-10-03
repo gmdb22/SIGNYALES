@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Model Runtime
+Signyales Pi-Side App — Model Runtime
 
 Wraps a TensorFlow Lite model for gesture inference. Loading is
 defensive by design: this module is expected to run correctly BEFORE

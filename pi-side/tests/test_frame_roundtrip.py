@@ -1,5 +1,5 @@
 """
-Signyales Pi Hub — Frame Format Round-Trip Test
+Signyales Pi-Side App — Frame Format Round-Trip Test
 
 Packs a synthetic combined_frame_t using the exact same struct layout
 the receiver firmware uses, computes the checksum the same way the

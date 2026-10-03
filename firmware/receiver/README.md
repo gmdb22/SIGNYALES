@@ -85,7 +85,7 @@ a line like:
 `ratio` is the packet delivery ratio computed from the highest sequence
 number seen so far minus dropped packets — this is the ESP-NOW-specific,
 per-hand figure for the proposal's Technical Performance Checklist.
-`signyales_pi_hub/tools/receiver_link_logger.py` can tap this over a
+`pi-side/tools/receiver_link_logger.py` can tap this over a
 second USB cable and log it to CSV across a testing session.
 
 This is a different (lower-level) measurement than the Pi hub's own
