@@ -89,20 +89,25 @@ void handleIncomingPacket(const uint8_t* data, int len) {
   // a misconfigured third device ever sending to this receiver.
 }
 
-// ESP-NOW's receive callback signature changed between Arduino-ESP32
-// core versions. This covers both without requiring you to know which
-// one you have installed.
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-void onDataRecv(const esp_now_recv_info_t* info, const uint8_t* incomingData, int len) {
-  (void)info;
-  handleIncomingPacket(incomingData, len);
-}
-#else
+// ESP-NOW's receive callback signature differs between Arduino-ESP32
+// core 2.x (first argument is a plain MAC address: const uint8_t*) and
+// core 3.x (first argument is a const esp_now_recv_info_t*). An earlier
+// version of this file tried to detect which one is installed via the
+// ESP_ARDUINO_VERSION_MAJOR macro, but that detection is not reliable in
+// practice — confirmed by real compile failures even when that macro
+// should theoretically have selected the right branch.
+//
+// The fix: write this against the older (2.x) signature, which only
+// needs a plain pointer as its first argument, then explicitly cast it
+// to whatever esp_now_recv_cb_t actually is in your installed core when
+// registering it below. This works on BOTH core versions because the
+// function body never looks at what that first pointer actually points
+// to — it's immediately discarded either way — so the two signatures
+// are interchangeable in practice despite not being the same type.
 void onDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
   (void)mac;
   handleIncomingPacket(incomingData, len);
 }
-#endif
 
 // ------------------------------------------------------------------
 // Setup
@@ -126,7 +131,11 @@ void setup() {
     Serial.println("FATAL: esp_now_init failed. Halting.");
     while (true) delay(1000);
   }
-  esp_now_register_recv_cb(onDataRecv);
+  // The explicit cast is required: esp_now_register_recv_cb() expects a
+  // function pointer matching this core's actual esp_now_recv_cb_t type,
+  // which may not textually match onDataRecv's declared signature above
+  // (see the comment on onDataRecv for why that's safe here anyway).
+  esp_now_register_recv_cb((esp_now_recv_cb_t)onDataRecv);
 
   Serial.println("Setup complete. Waiting for gloves...");
 }
