@@ -12,7 +12,7 @@ signyales/
 │   └── tools/get_mac_address/  One-off utility to read the receiver's MAC address
 ├── pi-side/                   Python application that runs on the Raspberry Pi 5
 ├── training/                 Offline TinyML training pipeline (Jupyter + scripts)
-└── docs/                     Software requirements, system de
+└── docs/                     Software requirements, system design, hardware
                                assembly guide, research/testing instruments,
                                a build walkthrough, and a current verification
                                status snapshot
@@ -62,9 +62,7 @@ rest).
 
 Each subfolder has its own README with full details — this file is just the
 map.
-separate application to run all tests in sequence
 
-update the readme everytime you push changes in this file with this format, this marks the first one. 
 
 Oct.4, 2026 (3am) - rn just testing the firmware. everything seems to compile except the receiver firmware, needs to get checked out. 
    -so far i have jsut checked the firmware, we still need to build the other software stuff so i had gab start working on it while i try and understand the whole shabang wit da firmware. 
