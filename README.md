@@ -86,4 +86,4 @@ vibe coding the fuck outta the capstone -recce
 
 update on how the testing has been -andrei
 
-FAH use /compact when vibing, i am going nowhere dawg
+FAH use /compact when vibing, i am going nowhere dawg brah
