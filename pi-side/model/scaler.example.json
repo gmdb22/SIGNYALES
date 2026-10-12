@@ -1,0 +1,5 @@
+{
+  "_comment": "Example only. Replace with real per-feature mean/std computed on the training set, in the same 22-feature order documented in config.py: left_flex(5), right_flex(5), left_accel(3), left_gyro(3), right_accel(3), right_gyro(3).",
+  "mean": [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+  "std":  [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.5, 0.5, 0.5, 10.0, 10.0, 10.0, 0.5, 0.5, 0.5, 10.0, 10.0, 10.0]
+}

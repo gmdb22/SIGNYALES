@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Signyales Test Log</title>
+<style>
+  :root {
+    --paper: #faf9f6;
+    --paper-raised: #ffffff;
+    --ink: #20262b;
+    --ink-soft: #5c6670;
+    --line: #d8dde1;
+    --graphite: #1f2933;
+    --amber: #e08e2b;
+    --amber-deep: #b76e1a;
+    --pass: #2f7a4f;
+    --fail: #b3412c;
+    --na: #8a8f94;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #15191c;
+      --paper-raised: #1d2227;
+      --ink: #e8e6e1;
+      --ink-soft: #9aa3ab;
+      --line: #343c42;
+      --graphite: #0f1316;
+      --amber: #f0a23e;
+      --amber-deep: #f0a23e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #15191c;
+    --paper-raised: #1d2227;
+    --ink: #e8e6e1;
+    --ink-soft: #9aa3ab;
+    --line: #343c42;
+    --graphite: #0f1316;
+    --amber: #f0a23e;
+    --amber-deep: #f0a23e;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+  }
+  .mono {
+    font-family: ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  header {
+    background: var(--graphite);
+    color: #f1efe9;
+    padding: 28px 20px 24px;
+  }
+  header .eyebrow {
+    color: var(--amber);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  header h1 {
+    margin: 6px 0 4px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    max-width: 34ch;
+  }
+  header p {
+    margin: 0;
+    color: #bcc3c9;
+    font-size: 0.92rem;
+    max-width: 50ch;
+  }
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 20px 16px 80px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .meta-field { flex: 1 1 200px; }
+  label.field-label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+    margin-bottom: 4px;
+  }
+  input[type=text], input[type=date], textarea {
+    width: 100%;
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--ink);
+    padding: 9px 11px;
+    font-size: 0.95rem;
+    font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 56px; }
+  .stage {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--amber);
+    border-radius: 8px;
+    padding: 16px 16px 14px;
+    margin-bottom: 14px;
+  }
+  .stage-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .stage-num {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-weight: 700;
+    color: var(--amber-deep);
+    font-size: 0.85rem;
+  }
+  .stage-title {
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .toggles {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .toggle {
+    flex: 1;
+    text-align: center;
+    padding: 8px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink-soft);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .toggle[data-active="true"][data-val="pass"] { background: var(--pass); border-color: var(--pass); color: #fff; }
+  .toggle[data-active="true"][data-val="fail"] { background: var(--fail); border-color: var(--fail); color: #fff; }
+  .toggle[data-active="true"][data-val="na"]   { background: var(--na);   border-color: var(--na);   color: #fff; }
+  .stage textarea { font-size: 0.88rem; }
+  .stage .hint {
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    margin: 6px 0 0;
+  }
+  .generate-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    margin-top: 22px;
+    background: var(--graphite);
+    color: #f1efe9;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .generate-btn:active { opacity: 0.85; }
+  #summaryBlock { display: none; margin-top: 18px; }
+  #summaryBlock.show { display: block; }
+  #summaryText {
+    width: 100%;
+    min-height: 260px;
+    font-size: 0.82rem;
+    white-space: pre;
+  }
+  .copy-btn {
+    margin-top: 10px;
+    width: 100%;
+    padding: 12px;
+    background: var(--amber);
+    color: #241a0a;
+    border: none;
+    border-radius: 8px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .copy-btn[data-copied="true"] { background: var(--pass); color: #fff; }
+  footer {
+    text-align: center;
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    padding: 10px 16px 24px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">SIGNYALES &middot; HARDWARE TEST LOG</div>
+  <h1>Log your results stage by stage</h1>
+  <p>Fill this in as you go through the testing guide. At the end, generate a clean summary you can copy and send back.</p>
+</header>
+
+<main>
+  <div class="meta-row">
+    <div class="meta-field">
+      <label class="field-label" for="testerName">Your name</label>
+      <input type="text" id="testerName" placeholder="Who's testing">
+    </div>
+    <div class="meta-field">
+      <label class="field-label" for="testDate">Date</label>
+      <input type="date" id="testDate">
+    </div>
+  </div>
+
+  <div id="stages"></div>
+
+  <button class="generate-btn" id="generateBtn">Generate summary</button>
+
+  <div id="summaryBlock">
+    <label class="field-label" for="summaryText" style="margin-top:16px;">Summary — copy this and send it back</label>
+    <textarea id="summaryText" class="mono" readonly></textarea>
+    <button class="copy-btn" id="copyBtn">Copy to clipboard</button>
+  </div>
+</main>
+
+<footer>Saved automatically on this device as you type &mdash; nothing is sent anywhere until you copy and send it yourself.</footer>
+
+<script>
+const STAGES = [
+  {
+    title: "Code compiles",
+    hint: "Paste the pio run output, or the exact error if it failed."
+  },
+  {
+    title: "Left glove boots & calibrates",
+    hint: "Paste the calibration min/max lines for all 5 fingers."
+  },
+  {
+    title: "Right glove boots & calibrates",
+    hint: "Same as above, for the right glove."
+  },
+  {
+    title: "Receiver sees both gloves",
+    hint: "Paste a couple of the [stats] lines."
+  },
+  {
+    title: "Pi UART link wired & working",
+    hint: "Pi 5: use /dev/ttyAMA0, not /dev/serial0. Note the ls output, the loopback test result (expect b'hello'), and whether disable-bt was needed."
+  },
+  {
+    title: "Hub app runs (test_frame_roundtrip + main.py -v)",
+    hint: "Note whether both ran with no errors."
+  },
+  {
+    title: "Full end-to-end recognition",
+    hint: "Note what gesture you tried and whether it was recognized and spoken correctly. Write N/A if no model file exists yet."
+  },
+  {
+    title: "(Stage 7b) Real-data sanity check",
+    hint: "Where files were saved, any errors, whether both hands appear in the data, whether fist vs. open-hand values clearly differ."
+  },
+  {
+    title: "(Stage 8) Battery test",
+    hint: "Battery type/capacity, start time, and the time each glove's delivery ratio dropped to 0%. Note if still running at 3h."
+  },
+  {
+    title: "(Stage 9) Range test",
+    hint: "The [stats] line at 1m, 3m, 5m, 10m, and once obstructed (wall/body between glove and receiver)."
+  }
+];
+
+const STORAGE_KEY = "signyales_test_log_v1";
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveState(state) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    // Storage unavailable — form still works, it just won't persist on refresh.
+  }
+}
+
+const state = loadState();
+
+const stagesEl = document.getElementById("stages");
+STAGES.forEach((stage, i) => {
+  const key = "stage" + i;
+  const saved = state[key] || { status: null, notes: "" };
+
+  const el = document.createElement("div");
+  el.className = "stage";
+  el.innerHTML = `
+    <div class="stage-head">
+      <span class="stage-num">STAGE ${i + 1}</span>
+      <span class="stage-title">${stage.title}</span>
+    </div>
+    <div class="toggles" data-key="${key}">
+      <div class="toggle" data-val="pass">PASS</div>
+      <div class="toggle" data-val="fail">FAIL</div>
+      <div class="toggle" data-val="na">N/A</div>
+    </div>
+    <textarea data-key="${key}" placeholder="Notes, numbers, or error text...">${saved.notes || ""}</textarea>
+    <p class="hint">${stage.hint}</p>
+  `;
+  stagesEl.appendChild(el);
+
+  const toggles = el.querySelectorAll(".toggle");
+  toggles.forEach(t => {
+    if (saved.status === t.dataset.val) t.setAttribute("data-active", "true");
+    t.addEventListener("click", () => {
+      toggles.forEach(x => x.removeAttribute("data-active"));
+      t.setAttribute("data-active", "true");
+      state[key] = state[key] || {};
+      state[key].status = t.dataset.val;
+      saveState(state);
+    });
+  });
+
+  const textarea = el.querySelector("textarea");
+  textarea.addEventListener("input", () => {
+    state[key] = state[key] || {};
+    state[key].notes = textarea.value;
+    saveState(state);
+  });
+});
+
+const nameInput = document.getElementById("testerName");
+const dateInput = document.getElementById("testDate");
+nameInput.value = state.testerName || "";
+dateInput.value = state.testDate || "";
+nameInput.addEventListener("input", () => { state.testerName = nameInput.value; saveState(state); });
+dateInput.addEventListener("input", () => { state.testDate = dateInput.value; saveState(state); });
+
+function statusLabel(val) {
+  if (val === "pass") return "PASS";
+  if (val === "fail") return "FAIL";
+  if (val === "na") return "N/A";
+  return "(not marked)";
+}
+
+document.getElementById("generateBtn").addEventListener("click", () => {
+  const lines = [];
+  lines.push("SIGNYALES HARDWARE TEST LOG");
+  lines.push("Tester: " + (nameInput.value || "(not given)"));
+  lines.push("Date: " + (dateInput.value || "(not given)"));
+  lines.push("");
+  STAGES.forEach((stage, i) => {
+    const s = state["stage" + i] || {};
+    lines.push(`Stage ${i + 1} — ${stage.title}: ${statusLabel(s.status)}`);
+    if (s.notes && s.notes.trim()) {
+      lines.push("  " + s.notes.trim().split("\n").join("\n  "));
+    }
+    lines.push("");
+  });
+  document.getElementById("summaryText").value = lines.join("\n").trim();
+  const block = document.getElementById("summaryBlock");
+  block.classList.add("show");
+  if (typeof block.scrollIntoView === "function") {
+    block.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+});
+
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const text = document.getElementById("summaryText").value;
+  const btn = document.getElementById("copyBtn");
+  try {
+    await navigator.clipboard.writeText(text);
+    btn.textContent = "Copied!";
+    btn.setAttribute("data-copied", "true");
+  } catch (e) {
+    document.getElementById("summaryText").select();
+    btn.textContent = "Select-all done — copy manually";
+  }
+  setTimeout(() => {
+    btn.textContent = "Copy to clipboard";
+    btn.removeAttribute("data-copied");
+  }, 2000);
+});
+</script>
+
+</body>
+</html>

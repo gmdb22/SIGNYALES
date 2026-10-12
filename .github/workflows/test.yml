@@ -1,0 +1,118 @@
+name: Signyales Tests
+
+# Runs everything that's testable without physical hardware, automatically,
+# on every push and pull request. This is specifically the same set of
+# checks documented in docs/No_Hardware_Verification_Status.docx — this
+# workflow just runs them automatically instead of by hand.
+#
+# A real bug this would have caught automatically: an ESP-NOW callback
+# signature issue in the receiver firmware that only surfaced when
+# compiling against a specific Arduino-ESP32 core version. The
+# firmware-compile-check job below exists specifically so a problem like
+# that shows up as a failed CI run, not as a surprise during a later
+# manual compile.
+
+"on":
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:  # allows manually triggering a run from GitHub's UI
+
+jobs:
+
+  # ------------------------------------------------------------------
+  # Frame format contract test — pure Python standard library, no
+  # dependencies to install, so this job is fast and has nothing that
+  # can fail except the actual logic being tested.
+  # ------------------------------------------------------------------
+  frame-format-test:
+    name: Frame format round-trip test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run test_frame_roundtrip.py
+        working-directory: pi-side
+        run: python tests/test_frame_roundtrip.py
+
+  # ------------------------------------------------------------------
+  # Native firmware logic tests — compiles and runs the REAL packet.h
+  # and frame.h files with a plain C++ compiler, no ESP32 toolchain
+  # needed. ubuntu-latest ships g++ already, so no extra install step.
+  # ------------------------------------------------------------------
+  native-firmware-logic-tests:
+    name: Native packet.h / frame.h logic tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run native logic tests
+        working-directory: firmware
+        run: bash tests/native/run_all.sh
+
+  # ------------------------------------------------------------------
+  # Pi-side pipeline smoke test — confirms the full app starts cleanly
+  # against synthetic data, with no model present (exactly like a fresh
+  # checkout would have). Only needs numpy: TTS is skipped via --no-tts,
+  # the model loader degrades gracefully with no tensorflow installed
+  # (that's intentional — see model_runtime.py), and the status LED is
+  # off by default so gpiozero is never imported.
+  # ------------------------------------------------------------------
+  pi-side-pipeline-smoke-test:
+    name: Pi-side pipeline smoke test (--simulate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install minimal dependencies
+        run: pip install numpy
+      - name: Run the full pipeline briefly against synthetic data
+        working-directory: pi-side
+        run: |
+          timeout 8 python -m signyales_hub.main --simulate --no-tts -v || code=$?
+          # `timeout` exits 124 when it had to kill a still-running process —
+          # that's the EXPECTED outcome here, since main.py loops forever by
+          # design. Any other non-zero exit code means it actually crashed.
+          if [ "${code:-0}" -ne 0 ] && [ "${code:-0}" -ne 124 ]; then
+            echo "Pipeline exited with unexpected code $code — treating as a failure"
+            exit 1
+          fi
+          echo "Pipeline ran cleanly for 8s with no crash (exit code: ${code:-0 (ended on its own)})"
+
+  # ------------------------------------------------------------------
+  # Firmware compile checks — the one job that needs real network access
+  # to download the ESP32 toolchain, which is exactly why this couldn't
+  # be verified in a sandboxed development environment and had to wait
+  # for an actual compile attempt to surface the ESP-NOW bug. Running
+  # this in CI closes that gap going forward.
+  # ------------------------------------------------------------------
+  firmware-compile-check:
+    name: Compile ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # one target failing shouldn't hide results for the others
+      matrix:
+        target:
+          - { name: "left glove", dir: "firmware/glove", env: "left_glove" }
+          - { name: "right glove", dir: "firmware/glove", env: "right_glove" }
+          - { name: "receiver", dir: "firmware/receiver", env: "" }
+          - { name: "MAC address utility", dir: "firmware/tools/get_mac_address", env: "" }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Compile
+        working-directory: ${{ matrix.target.dir }}
+        run: |
+          if [ -n "${{ matrix.target.env }}" ]; then
+            pio run -e ${{ matrix.target.env }}
+          else
+            pio run
+          fi
