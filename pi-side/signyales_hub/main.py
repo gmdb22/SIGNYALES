@@ -8,7 +8,7 @@ Target hardware: Raspberry Pi 5 (4GB), Raspberry Pi OS Bookworm (64-bit).
         --> TinyML inference --> debounce --> print text + speak
 
 Run against real hardware:
-    python -m signyales_hub.main --port /dev/serial0 --baud 460800 --model-dir model
+    python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 --model-dir model
 
 Run without any hardware or trained model, to exercise the rest of
 the pipeline (useful in early sprints, per the proposal's Agile Scrum

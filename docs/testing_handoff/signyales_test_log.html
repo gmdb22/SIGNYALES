@@ -255,7 +255,7 @@ const STAGES = [
   },
   {
     title: "Pi UART link wired & working",
-    hint: "Note whether /dev/serial0 existed, and whether the disable-bt fix was needed."
+    hint: "Pi 5: use /dev/ttyAMA0, not /dev/serial0. Note the ls output, the loopback test result (expect b'hello'), and whether disable-bt was needed."
   },
   {
     title: "Hub app runs (test_frame_roundtrip + main.py -v)",
@@ -264,6 +264,18 @@ const STAGES = [
   {
     title: "Full end-to-end recognition",
     hint: "Note what gesture you tried and whether it was recognized and spoken correctly. Write N/A if no model file exists yet."
+  },
+  {
+    title: "(Stage 7b) Real-data sanity check",
+    hint: "Where files were saved, any errors, whether both hands appear in the data, whether fist vs. open-hand values clearly differ."
+  },
+  {
+    title: "(Stage 8) Battery test",
+    hint: "Battery type/capacity, start time, and the time each glove's delivery ratio dropped to 0%. Note if still running at 3h."
+  },
+  {
+    title: "(Stage 9) Range test",
+    hint: "The [stats] line at 1m, 3m, 5m, 10m, and once obstructed (wall/body between glove and receiver)."
   }
 ];
 

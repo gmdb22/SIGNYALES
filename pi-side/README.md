@@ -28,37 +28,40 @@ receiver UART -> parse frames -> extract features -> sliding window
 
 ### 1. Enable the hardware UART
 
-On a Pi 5 running Bookworm, GPIO14/15 default to a low-throughput **mini UART**,
-because the full-featured **PL011 UART** (needed for a reliable 460800 baud link)
-is claimed by Bluetooth by default — this is true on Pi 5 exactly as it was on
-Pi 3/4, RP1 chip or not. To free the PL011 for this project:
+**Pi 5-specific — do not trust `/dev/serial0`.** On earlier Pi models,
+`/dev/serial0` pointed to the GPIO header UART. On the **Pi 5**, it instead
+points to a separate 3-pin debug connector, unrelated to the GPIO14/15
+pins this project wires to. Checking that it exists will give a
+misleading "yes" that has nothing to do with whether the receiver
+connection actually works. Use `/dev/ttyAMA0` directly, and verify it with
+a real loopback test rather than a file-existence check:
 
 ```
+sudo raspi-config   # Interface Options -> Serial Port -> login shell: No, hardware: Yes
 sudo nano /boot/firmware/config.txt
 ```
 
-Add at the end:
-
+Add at the end, save, then reboot:
 ```
-dtoverlay=disable-bt
+dtparam=uart0=on
 ```
-
-Then disable the Bluetooth services and remove the serial console so nothing
-else fights over the port:
-
 ```
-sudo systemctl disable hciuart
-sudo systemctl disable bluetooth
-sudo raspi-config   # Interface Options -> Serial Port -> login shell: No, hardware: Yes
 sudo reboot
 ```
 
-After rebooting, `/dev/serial0` should be symlinked to `/dev/ttyAMA0` (the
-PL011). Confirm with:
+**Loopback test (receiver not connected yet):** jumper GPIO14 (pin 8)
+directly to GPIO15 (pin 10), then:
+```
+python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
+```
+Expect `b'hello'`. Remove the jumper once confirmed.
 
-```
-ls -l /dev/serial0
-```
+If that printed `b''` or the device doesn't exist, `dtoverlay=disable-bt`
+may also be needed (sources disagree on whether Pi 5 requires this the
+same way Pi 3/4 did) — add it to the same config.txt, reboot, and repeat
+the loopback test. See
+`docs/testing_handoff/Signyales_Hardware_Testing_Handoff.md`, Stage 5, for
+the full walkthrough.
 
 Wire the receiver dongle's TX/RX to the Pi's RX/TX (crossed) plus a shared
 ground, matching the pins set in the receiver's `config.h`.
@@ -95,7 +98,7 @@ structure.
 ### 5. Run against real hardware
 
 ```
-python -m signyales_hub.main --port /dev/serial0 --baud 460800 --model-dir model
+python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 --model-dir model
 ```
 
 Add `--subtitle` for large, fullscreen text output during a demo — this is
@@ -104,7 +107,7 @@ plain large text with no GUI elements, buttons, or windows, matching the
 proposal's "console or LED-based" scope language:
 
 ```
-python -m signyales_hub.main --port /dev/serial0 --model-dir model --subtitle
+python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model --subtitle
 ```
 
 When `--subtitle` is on, logging is redirected to `signyales.log` instead
@@ -144,9 +147,13 @@ will just be wrong in a way that's hard to notice by inspection.
   Cortex-A76 can likely sustain this comfortably, but run
   `tools/benchmark_inference.py` once a real model exists and adjust if p95
   latency is close to the time budget between strides.
-- **UART setup** did not get simpler on Pi 5 — Bluetooth still claims the
-  PL011 by default, so `dtoverlay=disable-bt` is still required, the same as
-  on a Pi 4.
+- **UART setup did not get simpler on Pi 5, and changed in a new way:**
+  `/dev/serial0` no longer points to the GPIO header UART at all (it's the
+  separate debug connector instead) — use `/dev/ttyAMA0` and verify with a
+  real loopback test, not a file-existence check. Whether `disable-bt` is
+  also required is genuinely unclear from available sources; try
+  `dtparam=uart0=on` first and only add `disable-bt` if the loopback test
+  still fails.
 
 ## Known limitations
 

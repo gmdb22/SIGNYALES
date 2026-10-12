@@ -131,42 +131,54 @@ This requires physically wiring 3 wires between the receiver and the Pi's
 GPIO header (TX, RX — crossed — and GND). See the wiring diagram in the
 Hardware Assembly Guide for exact pins.
 
-**Before anything else, on the Pi itself**, confirm the serial port is set
-up correctly (this is a one-time Pi configuration step, unrelated to our
-code):
-```bash
-ls /dev/serial0
-```
+**Important, Pi 5-specific: do not trust `/dev/serial0` here.** On earlier
+Raspberry Pi models, `/dev/serial0` pointed to the GPIO header UART. On the
+**Pi 5 specifically**, `/dev/serial0` instead points to a separate 3-pin
+debug connector that isn't what we've wired — checking for it will give a
+misleading "it exists" result that has nothing to do with the receiver
+connection. Use the loopback test below instead of trusting any file
+existence check.
 
-**If this says "No such file or directory," do this one-time fix:**
+**Step 1 — see what's actually there:**
+```bash
+ls -l /dev/serial* /dev/ttyAMA*
+```
+Report this output exactly, whatever it shows.
+
+**Step 2 — enable the header UART:**
 ```bash
 sudo raspi-config
 ```
-Navigate to **Interface Options → Serial Port** → answer **No** to "login
-shell over serial", **Yes** to "enable serial port hardware" → Finish.
-
-Then edit the boot config:
+Interface Options → Serial Port → **No** to login shell over serial,
+**Yes** to serial hardware → Finish. Then:
 ```bash
 sudo nano /boot/firmware/config.txt
 ```
-Add this line at the end:
+Add this line at the end, save (Ctrl+O, Enter, Ctrl+X):
 ```
-dtoverlay=disable-bt
+dtparam=uart0=on
 ```
-Save (Ctrl+O, Enter, Ctrl+X), then disable two services and reboot:
 ```bash
-sudo systemctl disable hciuart
-sudo systemctl disable bluetooth
 sudo reboot
 ```
 
-After it reboots, run `ls /dev/serial0` again to confirm it now exists.
-This step is only ever needed once per Pi — **why it's needed:** by
-default, Bluetooth claims the Pi's good UART hardware, leaving only a
-low-quality fallback on the GPIO pins that isn't reliable at the speed this
-project needs. Disabling Bluetooth frees up the good one. If it still
-doesn't appear after this, that's worth reporting back, since it would be
-unusual.
+**Step 3 — loopback test (receiver NOT connected yet).** Use a single
+jumper wire to connect GPIO14 (pin 8) directly to GPIO15 (pin 10) — this
+makes the Pi talk to itself so we can test the port in isolation, before
+any receiver wiring could confuse the result. In the `pi-side` venv:
+```bash
+python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
+```
+**Expected output:** `b'hello'`. Then **remove the jumper wire**.
+
+- **If you got `b'hello'`:** `/dev/ttyAMA0` is the correct port. Wire the
+  receiver as shown in the Hardware Assembly Guide (receiver TX → Pi RX,
+  receiver RX → Pi TX, GND → GND), and use `--port /dev/ttyAMA0` (not
+  `/dev/serial0`) in every command for the rest of this guide.
+- **If the device doesn't exist, or it printed `b''`:** stop and report
+  the Step 1 output plus the exact error. As a fallback ONLY after
+  reporting that, you can try adding `dtoverlay=disable-bt` to the same
+  config.txt and rebooting, then repeat the loopback test.
 
 ---
 
@@ -210,7 +222,7 @@ on your part.
 
 If it is there:
 ```bash
-python -m signyales_hub.main --port /dev/serial0 --model-dir model -v
+python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model -v
 ```
 
 Wear both gloves and perform a gesture. You should see `[gesture] <name>`
@@ -218,6 +230,66 @@ printed, and hear it spoken aloud through a connected speaker.
 
 **Report back:** does it recognize anything at all, and does the spoken
 output sound right?
+
+---
+
+### Stage 7b — Real-data sanity check
+
+No trained model exists yet, so Stage 7 can't be fully tested. This
+instead checks that real sensor data flows correctly into the data
+collection tool, which the next phase of this project depends on — not
+gesture accuracy, just that the data pipeline works with real hands
+instead of synthetic data.
+
+**Step 1.** Run this and report the output:
+```bash
+python tools/collect_gesture.py --help
+```
+
+**Step 2.** Using those options, record about 5 repetitions each of two
+very different hand positions (for example, a closed fist and an open
+hand), plus a few seconds with the hands idle.
+
+**Step 3. Report:**
+- Where the recorded files were saved
+- Any errors encountered
+- Whether both hands' data appears in the output
+- Whether finger values clearly differ between the fist and open-hand
+  positions (a sanity check that the sensors are actually responding to
+  real hand movement, not just producing noise)
+
+---
+
+### Stage 8 — Battery test
+
+1. Fully charge both gloves. Note the battery type and capacity printed
+   on it.
+2. Start both gloves, the receiver, and the Pi hub together, and leave
+   them running continuously with the gloves worn or held still.
+3. Note the start time. Check the receiver's `[stats]` line every 15
+   minutes.
+4. Record the time each glove stops transmitting (its delivery ratio
+   drops to 0%).
+5. If a glove is still running after 3 hours, stop there and report that
+   rather than continuing indefinitely.
+
+**Report:** battery details, start time, and the cutoff time for each
+glove.
+
+---
+
+### Stage 9 — Range test
+
+Keep the receiver and Pi in one fixed location. Use a tape measure.
+
+1. With both gloves powered on, stand at 1 m, 3 m, 5 m, and 10 m in clear
+   line of sight of the receiver.
+2. At each distance, hold position for about 30 seconds and copy down the
+   `[stats]` line.
+3. Repeat once at 5 m with a wall or door between you and the receiver,
+   and once more with the receiver positioned behind your own body.
+
+**Report:** the `[stats]` line for each of the positions above.
 
 ---
 
@@ -230,9 +302,12 @@ Stage 1 (compiles):          PASS / FAIL — [notes]
 Stage 2 (left glove):        PASS / FAIL — [calibration numbers]
 Stage 3 (right glove):       PASS / FAIL — [calibration numbers]
 Stage 4 (receiver sees both): PASS / FAIL — [stats line]
-Stage 5 (Pi UART wiring):    PASS / FAIL — [notes]
+Stage 5 (Pi UART wiring):    PASS / FAIL — [ls output / loopback result / port used]
 Stage 6 (hub app runs):      PASS / FAIL — [notes]
 Stage 7 (full recognition):  PASS / FAIL / NOT APPLICABLE (no model yet)
+Stage 7b (real data):        PASS / FAIL — [notes]
+Stage 8 (battery):           left ___ min, right ___ min (or still running at 3h)
+Stage 9 (range):             1m ___ | 3m ___ | 5m ___ | 10m ___ | obstructed ___
 ```
 
 ## One general rule while testing

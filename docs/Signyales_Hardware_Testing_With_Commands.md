@@ -112,35 +112,48 @@ keeps running on its own either way.
 ## Part 6 — Wire the receiver to the Raspberry Pi
 
 Connect the 3 UART wires (crossed TX/RX + shared GND) per the wiring
-diagram. Then, **on the Pi itself** (not your laptop), confirm the serial
-port exists:
+diagram.
 
+**Pi 5-specific — do not trust `/dev/serial0`.** Unlike earlier Pi models,
+the Pi 5's `/dev/serial0` points to a separate 3-pin debug connector, not
+the GPIO14/15 pins we're wiring to. A file-existence check here gives a
+misleading result. Use a real loopback test instead.
+
+**On the Pi itself** (not your laptop), see what's actually there first:
 ```bash
-ls /dev/serial0
+ls -l /dev/serial* /dev/ttyAMA*
 ```
 
-**If that says "No such file or directory"**, run this one-time setup:
+**One-time setup:**
 ```bash
 sudo raspi-config
 ```
 → Interface Options → Serial Port → "login shell over serial": **No** →
 "enable serial port hardware": **Yes** → Finish.
-
-Then:
 ```bash
 sudo nano /boot/firmware/config.txt
 ```
 Add this line at the end, save (Ctrl+O, Enter, Ctrl+X):
 ```
-dtoverlay=disable-bt
+dtparam=uart0=on
 ```
 ```bash
-sudo systemctl disable hciuart
-sudo systemctl disable bluetooth
 sudo reboot
 ```
-After it reboots, run `ls /dev/serial0` again to confirm it now exists.
-This whole step is only ever needed once per Pi.
+
+**Loopback test (receiver NOT wired in yet)** — jumper GPIO14 (pin 8)
+directly to GPIO15 (pin 10), then in the `pi-side` venv:
+```bash
+python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
+```
+Expect `b'hello'`. **Remove the jumper** once confirmed, then wire the
+receiver for real. Use `/dev/ttyAMA0` (not `/dev/serial0`) in every
+command for the rest of this guide.
+
+If the test printed `b''` or the device didn't exist: try adding
+`dtoverlay=disable-bt` to the same config.txt and reboot, then repeat the
+loopback test — sources disagree on whether Pi 5 needs this the same way
+Pi 3/4 did, so treat it as a fallback to try, not an assumed requirement.
 
 ---
 
@@ -175,7 +188,7 @@ of hardware troubleshooting will fix a software problem.
 ## Part 9 — Run against the real, wired-up hardware
 
 ```bash
-python -m signyales_hub.main --port /dev/serial0 --baud 460800 -v
+python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 -v
 ```
 
 **Expected:** continuous log output with no errors, no long silences, and
@@ -196,7 +209,7 @@ This part only applies after you've collected real gesture data and
 trained a model — not yet, but documented here so you have it when ready.
 
 ```bash
-python -m signyales_hub.main --port /dev/serial0 --model-dir model -v
+python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model -v
 ```
 Wear both gloves, perform a known gesture, confirm `[gesture] <name>`
 prints and is spoken aloud.
@@ -217,6 +230,6 @@ python tools/accuracy_logger.py --gestures kumusta salamat oo --trials 10 --mode
 | 4 | `pio run -e left_glove -t upload` | `Setup complete. Streaming...` |
 | 4 | Calibration (`c`) | 5 finger lines, real min/max spread |
 | 5 | Receiver flash + both gloves on | `[stats]` line, ratios near 100% |
-| 6 | `ls /dev/serial0` on the Pi | File exists, no error |
+| 6 | Loopback test on `/dev/ttyAMA0` | Prints `b'hello'` |
 | 8 | `test_frame_roundtrip.py` | `PASS` |
 | 9 | `main.py -v` with real hardware | Continuous clean log output |

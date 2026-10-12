@@ -24,8 +24,13 @@ combined bimanual frame to the Raspberry Pi over UART at a fixed 50 Hz rate.
    GPIO18) to the Raspberry Pi's UART RX and TX pins respectively (cross
    them: receiver TX → Pi RX, receiver RX → Pi TX), plus a shared ground.
 5. On the Pi, enable the hardware UART (`raspi-config` → Interface Options →
-   Serial Port → login shell: no, hardware enabled: yes) and open
-   `/dev/serial0` at **460800 baud** to match `PI_UART_BAUD`.
+   Serial Port → login shell: no, hardware enabled: yes) and open it at
+   **460800 baud** to match `PI_UART_BAUD`. **Pi 5-specific:** use
+   `/dev/ttyAMA0`, not `/dev/serial0` — on the Pi 5, `/dev/serial0` points
+   to a separate debug connector, not these GPIO pins. Verify with a
+   loopback test before trusting it; see
+   `docs/testing_handoff/Signyales_Hardware_Testing_Handoff.md`, Stage 5,
+   for the exact steps.
 
 ## How synchronization works
 

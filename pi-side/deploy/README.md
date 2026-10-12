@@ -22,7 +22,7 @@ sudo ./deploy/install_service.sh
 
 The script detects your username and the repo's actual file path
 automatically — nothing to hand-edit. It starts the app with `--port
-/dev/serial0 --model-dir model` by default; if you want different flags,
+/dev/ttyAMA0 --model-dir model` by default; if you want different flags,
 edit `ExecStart=` in `/etc/systemd/system/signyales.service` afterward and
 run `sudo systemctl daemon-reload`.
 

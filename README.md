@@ -73,3 +73,17 @@ Oct.4, 2026 (3am) - rn just testing the firmware. everything seems to compile ex
    -everything compiles and runs (albeit no data set yet)
    -suggestion: create user friendly UI for testing, just make buttons pressable to test
    -suggestion: maybe make a separate application to run all tests in sequence
+
+
+   Oct.10, 2026 
+update sa consult form -renzo 
+
+client survey consent form -gab 
+
+surveys according to iso x2 software and hardware -gab 
+
+vibe coding the fuck outta the capstone -recce 
+
+update on how the testing has been -andrei
+
+FAH use /compact when vibing, i am going nowhere dawg

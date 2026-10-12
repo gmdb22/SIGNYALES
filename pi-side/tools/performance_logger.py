@@ -28,6 +28,7 @@ Usage:
 
 import argparse
 import csv
+import json
 import sys
 import time
 from pathlib import Path
@@ -143,18 +144,42 @@ def main():
         writer.writerows(recognition_events)
     print(f"\nRecognition events saved to {events_csv}")
 
-    print("\n=== Summary ===")
-    print(f"Session duration: {elapsed:.1f}s, total frames received: {total_frames}")
-    if total_frames:
-        print(f"Left-hand packet delivery ratio (Pi-side):  {left_valid_count / total_frames * 100:.1f}%")
-        print(f"Right-hand packet delivery ratio (Pi-side): {right_valid_count / total_frames * 100:.1f}%")
-        print(f"Both-hands-fresh ratio:                     {both_valid_count / total_frames * 100:.1f}%")
-    print(f"Gestures recognized: {len(recognition_events)}")
+    # Build the summary as a dict first, so it can be both printed AND
+    # saved to disk — previously this was print-only, which meant none of
+    # these numbers (delivery ratio, latency mean/std) were recoverable
+    # after the terminal closed, making them impossible to visualize or
+    # aggregate across sessions later.
+    summary = {
+        "session_duration_s": round(elapsed, 1),
+        "total_frames": total_frames,
+        "left_delivery_ratio_pct": round(left_valid_count / total_frames * 100, 1) if total_frames else None,
+        "right_delivery_ratio_pct": round(right_valid_count / total_frames * 100, 1) if total_frames else None,
+        "both_hands_fresh_ratio_pct": round(both_valid_count / total_frames * 100, 1) if total_frames else None,
+        "gestures_recognized": len(recognition_events),
+        "latency_mean_s": None,
+        "latency_std_s": None,
+    }
     if recognition_events:
         latencies = [e[3] for e in recognition_events]
         mean_latency = sum(latencies) / len(latencies)
         std_latency = (sum((v - mean_latency) ** 2 for v in latencies) / len(latencies)) ** 0.5
-        print(f"Recognition latency: mean={mean_latency:.2f}s, std={std_latency:.2f}s")
+        summary["latency_mean_s"] = round(mean_latency, 3)
+        summary["latency_std_s"] = round(std_latency, 3)
+
+    summary_json = out_path.parent / (out_path.name + "_summary.json")
+    with open(summary_json, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(f"Session summary saved to {summary_json}")
+
+    print("\n=== Summary ===")
+    print(f"Session duration: {summary['session_duration_s']}s, total frames received: {summary['total_frames']}")
+    if summary["left_delivery_ratio_pct"] is not None:
+        print(f"Left-hand packet delivery ratio (Pi-side):  {summary['left_delivery_ratio_pct']}%")
+        print(f"Right-hand packet delivery ratio (Pi-side): {summary['right_delivery_ratio_pct']}%")
+        print(f"Both-hands-fresh ratio:                     {summary['both_hands_fresh_ratio_pct']}%")
+    print(f"Gestures recognized: {summary['gestures_recognized']}")
+    if summary["latency_mean_s"] is not None:
+        print(f"Recognition latency: mean={summary['latency_mean_s']}s, std={summary['latency_std_s']}s")
 
 
 if __name__ == "__main__":
