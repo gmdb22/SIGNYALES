@@ -32,3 +32,7 @@ Thumbs.db
 *.exe
 firmware/tests/native/test_packet_logic
 firmware/tests/native/test_frame_logic
+
+# --- Test outputs (recordings/logs from hardware testing; use `git add -f` to commit deliberately) ---
+training/data/*/
+pi-side/results/

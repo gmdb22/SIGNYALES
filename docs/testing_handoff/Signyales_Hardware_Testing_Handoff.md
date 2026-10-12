@@ -19,11 +19,12 @@ report back.
 - [ ] [VSCode](https://code.visualstudio.com/) installed, plus its **PlatformIO IDE** extension (search for it in VSCode's Extensions panel)
 - [ ] The assembled hardware: 2 gloves, 1 receiver dongle, 1 Raspberry Pi 5 — see `docs/Signyales_Hardware_Assembly_Guide.docx` in the repo for wiring diagrams if anything isn't assembled yet
 - [ ] A USB cable for each ESP32 board (gloves + receiver) to connect to your computer
+- [ ] Write down, before starting: which Raspberry Pi model you have (the proposal says Pi 4, this repo is written for Pi 5) and your PlatformIO version (`pio --version`)
 - [ ] Basic comfort with a terminal — every step below has an exact command to type, so you don't need prior experience with this specific project
 
 ---
 
-## Testing proceeds in 7 stages, in this exact order
+## Testing proceeds in these stages (1 to 9, including 1b and 7b), in this exact order
 
 Do not skip ahead — each stage assumes the previous one already works. If a
 later stage fails, the most likely cause is something in an earlier stage
@@ -44,6 +45,32 @@ pio run
 **Expected result:** Each command ends with `[SUCCESS]`. If you see a
 compile error instead, **stop here and report the exact error text back** —
 don't try to fix firmware code yourself unless asked to.
+
+---
+
+### Stage 1b — Set the receiver's MAC address (REQUIRED before Stage 2)
+
+`firmware/glove/src/config.h` ships with a placeholder
+(`RECEIVER_MAC = AA:BB:CC:DD:EE:FF`). Until it is replaced with your real
+receiver's address, the gloves transmit to nowhere and every glove will
+show `ratio=0.0%` in Stage 4. Do this first:
+
+1. Plug in **only the receiver ESP32** and flash the utility:
+   ```bash
+   cd firmware/tools/get_mac_address
+   pio run -t upload
+   pio device monitor
+   ```
+2. It prints a line like `MAC Address: AA:BB:CC:DD:EE:FF` (yours will differ). Copy it.
+3. Open `firmware/glove/src/config.h` and change the `RECEIVER_MAC` line,
+   one `0x..` per byte, for example `AA:BB:CC:11:22:33` becomes:
+   ```
+   static uint8_t RECEIVER_MAC[6] = {0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33};
+   ```
+4. Save, then continue to Stage 2 (both gloves will be flashed with the new
+   address). The real receiver firmware replaces this utility in Stage 4.
+
+**Report back:** the MAC address you read.
 
 ---
 
@@ -116,12 +143,12 @@ line like this print once per second:
 
 **Report back:** a few of these stats lines, copy-pasted exactly.
 
-**If one side stays at `ratio=0.0%`:** that glove doesn't know the
-receiver's address yet. You'll need to:
-1. Temporarily flash `firmware/tools/get_mac_address` onto the receiver instead
-2. Open its serial monitor — it prints a MAC address like `AA:BB:CC:DD:EE:FF`
-3. Report that address back, or if you're comfortable editing code: open `firmware/glove/src/config.h`, find `RECEIVER_MAC`, update it to match, and re-flash **both** gloves
-4. Re-flash the real receiver firmware back on afterward (Stage 4's first command)
+**If one side stays at `ratio=0.0%`:** that glove is not reaching the
+receiver. First re-check Stage 1b: the address in `config.h` must exactly
+match the receiver's, and **both** gloves must have been flashed *after*
+it was changed. If you edit `config.h` now, re-flash both gloves and then
+re-flash the real receiver firmware (`cd firmware/receiver`, `pio run -t upload`).
+If it still stays at 0%, report the stats lines and the MAC you used.
 
 ---
 
@@ -165,7 +192,8 @@ sudo reboot
 **Step 3 — loopback test (receiver NOT connected yet).** Use a single
 jumper wire to connect GPIO14 (pin 8) directly to GPIO15 (pin 10) — this
 makes the Pi talk to itself so we can test the port in isolation, before
-any receiver wiring could confuse the result. In the `pi-side` venv:
+any receiver wiring could confuse the result. In the `pi-side` venv (if it doesn't exist yet, create it first with the
+four commands at the start of Stage 6, then come back here):
 ```bash
 python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
 ```
@@ -191,7 +219,18 @@ cd pi-side
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+sudo apt install espeak-ng
 ```
+
+`espeak-ng` is what makes spoken output work (needed in Stage 7).
+`requirements.txt` installs full `tensorflow`, which is large and may fail
+on the Pi. No model exists yet, so it is not needed for Stages 5 to 7b: if
+the install fails, report the error and run this instead:
+```bash
+pip install pyserial numpy pyttsx3 pyfiglet gpiozero lgpio
+```
+(The fallback is untested; the project's CI notes say the hub runs without
+TensorFlow when no model is present.)
 
 First, a test that needs no hardware at all, to confirm the software
 itself is intact:
@@ -202,14 +241,28 @@ python tests/test_frame_roundtrip.py
 report it immediately — it means something about the files you received is
 different from what was tested, not a hardware problem.
 
-Then, with the receiver wired up and both gloves powered on:
+Then, with the receiver wired up and both gloves powered on, **from `pi-side/`
+with the venv active**, watch the live data for 30 seconds while you open and
+close the fingers of both hands:
 ```bash
-python -m signyales_hub.main -v
+python tools/live_view.py --port /dev/ttyAMA0 --duration 30
 ```
+It prints each hand's flex/accel/gyro values twice a second, then a summary
+(frame rate, how often each hand's data was fresh, sequence gaps, and each
+finger's min/max). If it prints `No frames for ...s`, the Pi is receiving
+nothing: re-check Stage 5 (TX/RX crossed, port, baud).
 
-**Report back:** whether you see continuous activity with no errors, or if
-it hangs with no output at all (which usually means the wiring in Stage 5
-isn't right — double check it's crossed correctly, not straight-through).
+**Report back:** the full summary printed at the end.
+
+Then confirm the main app also starts:
+```bash
+python -m signyales_hub.main --port /dev/ttyAMA0 -v
+```
+With no model, this app prints **no per-frame output**. Seeing only the
+"Opened serial link" line and a "No model loaded" warning is normal, and
+silence does not mean the link is dead (that's why `live_view.py` exists).
+Stop it with Ctrl+C. Report any error lines, in particular `Dropped a
+corrupt/misframed payload`.
 
 ---
 
@@ -241,22 +294,56 @@ collection tool, which the next phase of this project depends on — not
 gesture accuracy, just that the data pipeline works with real hands
 instead of synthetic data.
 
-**Step 1.** Run this and report the output:
-```bash
-python tools/collect_gesture.py --help
-```
+**Step 1.** On the Pi, from `pi-side/` with the venv active, run
+`python tools/collect_gesture.py --help` and report the output.
 
-**Step 2.** Using those options, record about 5 repetitions each of two
-very different hand positions (for example, a closed fist and an open
-hand), plus a few seconds with the hands idle.
+**Step 2.** Record about 5 repetitions each of two very different hand
+positions, plus a few seconds with the hands idle. Use `--out ../training/data`
+(the tool's built-in default points to a folder that doesn't exist in this repo):
+```bash
+python tools/collect_gesture.py --label fist --reps 5 --port /dev/ttyAMA0 --out ../training/data
+python tools/collect_gesture.py --label open --reps 5 --port /dev/ttyAMA0 --out ../training/data
+python tools/collect_gesture.py --label idle --reps 3 --port /dev/ttyAMA0 --out ../training/data
+```
+Files are saved as `training/data/<label>/rep_0000.npz`, and so on. Don't
+commit them to git: zip the `training/data` folder and send it instead.
 
 **Step 3. Report:**
 - Where the recorded files were saved
 - Any errors encountered
 - Whether both hands' data appears in the output
 - Whether finger values clearly differ between the fist and open-hand
-  positions (a sanity check that the sensors are actually responding to
-  real hand movement, not just producing noise)
+  positions. Run this from `pi-side/` and paste its full output:
+  ```bash
+  python tools/inspect_recordings.py --root ../training/data
+  ```
+  It lists per-finger averages for each gesture, how much repetitions of the
+  same gesture vary, and flags a hand that never moved or channels that
+  can't tell two gestures apart. It checks data consistency only.
+
+---
+
+### Stage 7c — Training-readiness checks (no model needed)
+
+These confirm the hardware gives data that is safe to train on. Run from
+`pi-side/` with the venv active, gloves and receiver powered and worn.
+
+1. **Left/right alignment.** Run `python tools/live_view.py --port /dev/ttyAMA0 --duration 15`
+   twice: once moving **only the left hand's** fingers, once moving **only
+   the right hand's**. In each summary, only the moved hand should show a
+   large spread. If the other hand also changes, or the wrong one does,
+   the sides are swapped or crosstalking: stop and report.
+2. **Repeatability.** In the `inspect_recordings.py` output from Stage 7b,
+   the `std/reps` row (how much repetitions of one gesture differ) should
+   be small compared with the difference between fist and open. Report the output.
+3. **Calibration survives a power cycle.** Unplug and replug one glove
+   (don't press `c`), run `python tools/live_view.py --port /dev/ttyAMA0 --duration 15`
+   while flexing its fingers, and report whether the min/max are similar to
+   Stage 2's. (The firmware says it saves calibration to flash; this checks it.)
+4. **Longer run.** Run
+   `python tools/live_view.py --port /dev/ttyAMA0 --duration 1800 --interval 60`
+   (30 minutes, one line per minute). Report the final summary, especially
+   the fresh-data percentages and sequence gaps, and anything that stalled.
 
 ---
 
@@ -282,14 +369,28 @@ glove.
 
 Keep the receiver and Pi in one fixed location. Use a tape measure.
 
-1. With both gloves powered on, stand at 1 m, 3 m, 5 m, and 10 m in clear
-   line of sight of the receiver.
-2. At each distance, hold position for about 30 seconds and copy down the
-   `[stats]` line.
-3. Repeat once at 5 m with a wall or door between you and the receiver,
-   and once more with the receiver positioned behind your own body.
+**Important:** the `[stats]` ratio is cumulative since the glove and receiver
+started (it is computed from sequence numbers), so lines taken in a row
+during one hold are *not* independent trials, and anything transmitted
+before you reached the spot is included. The proposal averages repeated
+trials, so use this procedure:
 
-**Report:** the `[stats]` line for each of the positions above.
+1. Stand at the position, **then** power on both gloves and the receiver there.
+2. Hold still for 30 seconds, then copy the latest `[stats]` line. That is one trial.
+3. Power-cycle everything and repeat for **3 trials** per position.
+4. Positions: 1 m, 3 m, 5 m, 10 m in clear line of sight. Then 5 m with a wall
+   or door between you and the receiver, and 5 m with the receiver behind
+   your own body.
+
+(Power-cycling restarts the counters. This reasoning comes from reading the
+receiver code, not from running it on hardware.)
+
+**Optional, if a second USB cable is available:**
+`python tools/receiver_link_logger.py --port <receiver USB port> --duration 60 --out results/range_<distance>m_run<n>.csv`
+(run from `pi-side/`) logs the stats line to a CSV for later averaging. This
+tool has not been tested against real hardware.
+
+**Report:** the `[stats]` line for every trial (3 per position).
 
 ---
 
@@ -299,6 +400,7 @@ Copy this and fill it in:
 
 ```
 Stage 1 (compiles):          PASS / FAIL — [notes]
+Stage 1b (MAC address):      DONE — [address read]
 Stage 2 (left glove):        PASS / FAIL — [calibration numbers]
 Stage 3 (right glove):       PASS / FAIL — [calibration numbers]
 Stage 4 (receiver sees both): PASS / FAIL — [stats line]
@@ -306,8 +408,10 @@ Stage 5 (Pi UART wiring):    PASS / FAIL — [ls output / loopback result / port
 Stage 6 (hub app runs):      PASS / FAIL — [notes]
 Stage 7 (full recognition):  PASS / FAIL / NOT APPLICABLE (no model yet)
 Stage 7b (real data):        PASS / FAIL — [notes]
+Stage 7c (readiness checks): alignment OK/NOT OK | repeatability notes | calibration kept after power cycle Y/N | 30-min run summary
 Stage 8 (battery):           left ___ min, right ___ min (or still running at 3h)
-Stage 9 (range):             1m ___ | 3m ___ | 5m ___ | 10m ___ | obstructed ___
+Stage 9 (range, 3 trials each): 1m ___ | 3m ___ | 5m ___ | 10m ___ | wall ___ | body ___
+Pi model / PlatformIO version: ___ / ___
 ```
 
 ## One general rule while testing
