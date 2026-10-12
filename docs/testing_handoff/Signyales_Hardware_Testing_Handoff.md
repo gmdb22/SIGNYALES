@@ -19,7 +19,7 @@ report back.
 - [ ] [VSCode](https://code.visualstudio.com/) installed, plus its **PlatformIO IDE** extension (search for it in VSCode's Extensions panel)
 - [ ] The assembled hardware: 2 gloves, 1 receiver dongle, 1 Raspberry Pi 5 — see `docs/Signyales_Hardware_Assembly_Guide.docx` in the repo for wiring diagrams if anything isn't assembled yet
 - [ ] A USB cable for each ESP32 board (gloves + receiver) to connect to your computer
-- [ ] Write down, before starting: which Raspberry Pi model you have (the proposal says Pi 4, this repo is written for Pi 5) and your PlatformIO version (`pio --version`)
+- [ ] Write down, before starting: which Raspberry Pi model you have (this project uses a Raspberry Pi 5; tell us if yours is different) and your PlatformIO version (`pio --version`)
 - [ ] Basic comfort with a terminal — every step below has an exact command to type, so you don't need prior experience with this specific project
 
 ---

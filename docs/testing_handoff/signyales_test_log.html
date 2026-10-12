@@ -222,6 +222,17 @@
     </div>
   </div>
 
+  <div class="meta-row">
+    <div class="meta-field">
+      <label class="field-label" for="piModel">Raspberry Pi model</label>
+      <input type="text" id="piModel" placeholder="Expected: Raspberry Pi 5">
+    </div>
+    <div class="meta-field">
+      <label class="field-label" for="pioVersion">PlatformIO version</label>
+      <input type="text" id="pioVersion" placeholder="Output of: pio --version">
+    </div>
+  </div>
+
   <div id="stages"></div>
 
   <button class="generate-btn" id="generateBtn">Generate summary</button>
@@ -237,49 +248,33 @@
 
 <script>
 const STAGES = [
-  {
-    title: "Code compiles",
-    hint: "Paste the pio run output, or the exact error if it failed."
-  },
-  {
-    title: "Left glove boots & calibrates",
-    hint: "Paste the calibration min/max lines for all 5 fingers."
-  },
-  {
-    title: "Right glove boots & calibrates",
-    hint: "Same as above, for the right glove."
-  },
-  {
-    title: "Receiver sees both gloves",
-    hint: "Paste a couple of the [stats] lines."
-  },
-  {
-    title: "Pi UART link wired & working",
-    hint: "Pi 5: use /dev/ttyAMA0, not /dev/serial0. Note the ls output, the loopback test result (expect b'hello'), and whether disable-bt was needed."
-  },
-  {
-    title: "Hub app runs (test_frame_roundtrip + main.py -v)",
-    hint: "Note whether both ran with no errors."
-  },
-  {
-    title: "Full end-to-end recognition",
-    hint: "Note what gesture you tried and whether it was recognized and spoken correctly. Write N/A if no model file exists yet."
-  },
-  {
-    title: "(Stage 7b) Real-data sanity check",
-    hint: "Where files were saved, any errors, whether both hands appear in the data, whether fist vs. open-hand values clearly differ."
-  },
-  {
-    title: "(Stage 8) Battery test",
-    hint: "Battery type/capacity, start time, and the time each glove's delivery ratio dropped to 0%. Note if still running at 3h."
-  },
-  {
-    title: "(Stage 9) Range test",
-    hint: "The [stats] line at 1m, 3m, 5m, 10m, and once obstructed (wall/body between glove and receiver)."
-  }
+  { id: "1",  num: "1",  title: "Code compiles",
+    hint: "Paste the pio run output, or the exact error if it failed." },
+  { id: "1b", num: "1b", title: "Receiver MAC address set",
+    hint: "Paste the MAC read from get_mac_address, and confirm RECEIVER_MAC in firmware/glove/src/config.h was updated before flashing both gloves. Don't commit that file." },
+  { id: "2",  num: "2",  title: "Left glove boots & calibrates",
+    hint: "Paste the calibration min/max lines for all 5 fingers." },
+  { id: "3",  num: "3",  title: "Right glove boots & calibrates",
+    hint: "Same as above, for the right glove." },
+  { id: "4",  num: "4",  title: "Receiver sees both gloves",
+    hint: "Paste a couple of the [stats] lines." },
+  { id: "5",  num: "5",  title: "Pi UART link wired & working",
+    hint: "Pi 5: use /dev/ttyAMA0, not /dev/serial0. Note the ls output, the loopback test result (expect b'hello'), and whether disable-bt was needed." },
+  { id: "6",  num: "6",  title: "Pi software runs (round-trip test, live_view.py, main.py)",
+    hint: "Paste the summary printed by tools/live_view.py. Note whether test_frame_roundtrip passed and main.py started with no error lines (it prints no per-frame output when no model is loaded)." },
+  { id: "7",  num: "7",  title: "Full end-to-end recognition",
+    hint: "Note what gesture you tried and whether it was recognized and spoken correctly. Write N/A if no model file exists yet." },
+  { id: "7b", num: "7b", title: "Real-data sanity check",
+    hint: "Where files were saved, any errors, and the full output of tools/inspect_recordings.py." },
+  { id: "7c", num: "7c", title: "Training-readiness checks",
+    hint: "Left/right alignment result, repeatability notes, whether calibration survived a power cycle, and the 30-minute live_view.py summary." },
+  { id: "8",  num: "8",  title: "Battery test",
+    hint: "Battery type/capacity, start time, and the time each glove's delivery ratio dropped to 0%. Note if still running at 3h." },
+  { id: "9",  num: "9",  title: "Range test (3 trials per position)",
+    hint: "Power-cycle between trials. Paste the [stats] line from each trial at 1m, 3m, 5m, 10m, 5m with a wall/door, and 5m with the receiver behind your body." }
 ];
 
-const STORAGE_KEY = "signyales_test_log_v1";
+const STORAGE_KEY = "signyales_test_log_v2";
 
 function loadState() {
   try {
@@ -302,14 +297,14 @@ const state = loadState();
 
 const stagesEl = document.getElementById("stages");
 STAGES.forEach((stage, i) => {
-  const key = "stage" + i;
+  const key = "stage_" + stage.id;
   const saved = state[key] || { status: null, notes: "" };
 
   const el = document.createElement("div");
   el.className = "stage";
   el.innerHTML = `
     <div class="stage-head">
-      <span class="stage-num">STAGE ${i + 1}</span>
+      <span class="stage-num">STAGE ${stage.num}</span>
       <span class="stage-title">${stage.title}</span>
     </div>
     <div class="toggles" data-key="${key}">
@@ -347,6 +342,12 @@ const dateInput = document.getElementById("testDate");
 nameInput.value = state.testerName || "";
 dateInput.value = state.testDate || "";
 nameInput.addEventListener("input", () => { state.testerName = nameInput.value; saveState(state); });
+const piInput = document.getElementById("piModel");
+const pioInput = document.getElementById("pioVersion");
+piInput.value = state.piModel || "";
+pioInput.value = state.pioVersion || "";
+piInput.addEventListener("input", () => { state.piModel = piInput.value; saveState(state); });
+pioInput.addEventListener("input", () => { state.pioVersion = pioInput.value; saveState(state); });
 dateInput.addEventListener("input", () => { state.testDate = dateInput.value; saveState(state); });
 
 function statusLabel(val) {
@@ -361,10 +362,12 @@ document.getElementById("generateBtn").addEventListener("click", () => {
   lines.push("SIGNYALES HARDWARE TEST LOG");
   lines.push("Tester: " + (nameInput.value || "(not given)"));
   lines.push("Date: " + (dateInput.value || "(not given)"));
+  lines.push("Raspberry Pi model: " + (piInput.value || "(not given)"));
+  lines.push("PlatformIO version: " + (pioInput.value || "(not given)"));
   lines.push("");
   STAGES.forEach((stage, i) => {
-    const s = state["stage" + i] || {};
-    lines.push(`Stage ${i + 1} — ${stage.title}: ${statusLabel(s.status)}`);
+    const s = state["stage_" + stage.id] || {};
+    lines.push(`Stage ${stage.num} — ${stage.title}: ${statusLabel(s.status)}`);
     if (s.notes && s.notes.trim()) {
       lines.push("  " + s.notes.trim().split("\n").join("\n  "));
     }
