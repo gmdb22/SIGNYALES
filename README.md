@@ -7,17 +7,23 @@ gesture recognition → spoken/text output.
 ```
 signyales/
 ├── firmware/
-│   ├── glove/               PlatformIO project — flash onto each glove (ESP32-S3)
+│   ├── glove/                PlatformIO project — flash onto each glove (ESP32-S3)
 │   ├── receiver/             PlatformIO project — flash onto the receiver (ESP32)
-│   └── tools/get_mac_address/  One-off utility to read the receiver's MAC address
-├── pi-side/                   Python application that runs on the Raspberry Pi 5
+│   ├── tools/get_mac_address/  One-off utility to read the receiver's MAC address
+│   └── tests/native/         Plain-g++ tests of packet.h / frame.h (no hardware)
+├── pi-side/                  Python application that runs on the Raspberry Pi 5
+│                             (tests/, tools/, deploy/, model/ live inside it)
 ├── training/                 Offline TinyML training pipeline (Jupyter + scripts)
+├── tools/                    Laptop-side helpers: test_dashboard.py (one-click
+│                             no-hardware tests), results_visualizer.py
+├── .github/workflows/        CI: runs the no-hardware tests on every push/PR
 └── docs/                     Software requirements, system design, hardware
-                               assembly guide, research/testing instruments,
-                               a build walkthrough, and a current verification
-                               status snapshot
+                              assembly guide, research/testing instruments,
+                              a build walkthrough, a verification status
+                              snapshot, and Signyales_Project_Log.md (dated
+                              team notes)
     └── testing_handoff/      Guide + fillable form for whoever is testing the
-                               physical hardware (not the project author)
+                              physical hardware (not the project author)
 ```
 
 ## Test Dashboard
@@ -63,27 +69,4 @@ rest).
 Each subfolder has its own README with full details — this file is just the
 map.
 
-
-Oct.4, 2026 (3am) - rn just testing the firmware. everything seems to compile except the receiver firmware, needs to get checked out. 
-   -so far i have jsut checked the firmware, we still need to build the other software stuff so i had gab start working on it while i try and understand the whole shabang wit da firmware. 
-   -we also need to worry about the data set we need to collect with the sensors as the available data set was meant to be used for camera based systems. 
-   -shibal saekkiya ok fuck we got this medyo malabo na makahabol tayo sa defense pero fuck it we ball lets just hope we can do it next sem. 
-
-   Oct.4, 2026 (3:30pm)  -reciever firmware fixed
-   -everything compiles and runs (albeit no data set yet)
-   -suggestion: create user friendly UI for testing, just make buttons pressable to test
-   -suggestion: maybe make a separate application to run all tests in sequence
-
-
-   Oct.10, 2026 
-update sa consult form -renzo 
-
-client survey consent form -gab 
-
-surveys according to iso x2 software and hardware -gab 
-
-vibe coding the fuck outta the capstone -recce 
-
-update on how the testing has been -andrei
-
-FAH use /compact when vibing, i am going nowhere dawg brah
+Dated team notes live in [`docs/Signyales_Project_Log.md`](docs/Signyales_Project_Log.md).

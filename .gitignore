@@ -27,3 +27,8 @@ pi-side/tools/results/
 # --- OS/editor cruft ---
 .DS_Store
 Thumbs.db
+
+# --- Native test binaries (built by firmware/tests/native/run_all.sh) ---
+*.exe
+firmware/tests/native/test_packet_logic
+firmware/tests/native/test_frame_logic
