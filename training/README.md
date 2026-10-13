@@ -30,8 +30,8 @@ gloves and receiver connected to a Pi:
 
 ```
 cd ../pi-side
-python tools/collect_gesture.py --label kumusta --reps 20 --out ../signyales_training/data
-python tools/collect_gesture.py --label salamat --reps 20 --out ../signyales_training/data
+python tools/collect_gesture.py --label kumusta --reps 20 --out ../training/data
+python tools/collect_gesture.py --label salamat --reps 20 --out ../training/data
 # ...repeat per gesture
 ```
 

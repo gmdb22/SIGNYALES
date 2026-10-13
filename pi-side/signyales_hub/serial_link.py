@@ -131,6 +131,13 @@ class SerialFrameReader:
                     break  # need the 2-byte length field too
 
                 length = buf[2] | (buf[3] << 8)
+                if length != FRAME_SIZE:
+                    # Not a real frame header (e.g. 0xAA 0x55 appearing inside
+                    # payload data or boot noise). Trusting this length would
+                    # make the reader wait for up to 64 KB, swallowing every
+                    # real frame in the meantime. Skip this marker and rescan.
+                    del buf[:2]
+                    continue
                 total_needed = 4 + length
                 if len(buf) < total_needed:
                     break  # wait for the rest of this frame to arrive

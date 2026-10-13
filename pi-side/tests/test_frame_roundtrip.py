@@ -20,7 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from signyales_hub.serial_link import GLOVE_FMT, FRAME_SIZE, parse_frame  # noqa: E402
+from signyales_hub.serial_link import (  # noqa: E402
+    GLOVE_FMT, FRAME_SIZE, SerialFrameReader, parse_frame,
+)
 
 
 def pack_glove(glove_id, seq, ts, flex, accel, gyro, checksum=0):
@@ -54,6 +56,53 @@ def build_test_frame():
     return payload, expected
 
 
+class _EndOfData(Exception):
+    pass
+
+
+class _FakeSerial:
+    """Stands in for pyserial so this test needs only the standard library."""
+
+    def __init__(self, data, chunk=103):
+        self._data = bytearray(data)
+        self._chunk = chunk
+
+    @property
+    def in_waiting(self):
+        return min(self._chunk, len(self._data))
+
+    def read(self, n):
+        if not self._data:
+            raise _EndOfData
+        out = bytes(self._data[:n])
+        del self._data[:n]
+        return out
+
+
+def _read_all(stream):
+    reader = SerialFrameReader.__new__(SerialFrameReader)  # skip opening a real port
+    reader._ser = _FakeSerial(stream)
+    frames = []
+    try:
+        for frame in reader:
+            frames.append(frame)
+    except _EndOfData:
+        pass
+    return frames
+
+
+def check_reader_resync(payload):
+    """The reader must not trust a bogus length field. Regression test for a
+    bug where one stray 0xAA 0x55 marker (boot noise, or those bytes appearing
+    inside payload data) made it wait for ~64 KB and swallow real frames."""
+    framed = bytes([0xAA, 0x55, FRAME_SIZE & 0xFF, FRAME_SIZE >> 8]) + payload
+    stream = framed * 300
+    assert len(_read_all(stream)) == 300, "clean stream lost frames"
+    bogus = b"\xAA\x55\xFF\xFF"  # sync marker followed by an impossible length
+    got = len(_read_all(bogus + stream))
+    assert got == 300, f"bogus length marker swallowed frames: parsed {got}/300"
+
+
 def main():
     payload, expected = build_test_frame()
     assert len(payload) == FRAME_SIZE, (
@@ -76,7 +125,10 @@ def main():
     corrupted[10] ^= 0xFF
     assert parse_frame(bytes(corrupted)) is None, "Corrupted payload was NOT rejected"
 
-    print("PASS: frame format round-trips correctly and checksum validation works.")
+    check_reader_resync(payload)
+
+    print("PASS: frame format round-trips correctly, checksum validation works, "
+          "and the reader resynchronizes past a bogus length field.")
 
 
 if __name__ == "__main__":

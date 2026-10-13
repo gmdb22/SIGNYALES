@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from signyales_hub.config import HubConfig  # noqa: E402
 from signyales_hub.serial_link import SerialFrameReader, SimulatedFrameSource  # noqa: E402
 
+LOSS_AFTER_S = 2.0  # a hand with no fresh data for this long counts as "lost"
 FLEX_SPREAD_WARN = 200  # counts (0-4095 scale). Heuristic, not from the proposal.
 NO_DATA_WARN_S = 3.0
 
@@ -57,6 +58,51 @@ class HandStats:
                 self.flex_min[i] = v
             if self.flex_max[i] is None or v > self.flex_max[i]:
                 self.flex_max[i] = v
+
+
+class LinkEvents:
+    """Detects when a hand stops sending fresh data (e.g. battery died, out of
+    range) and when it comes back. Brief single-frame dropouts are ignored;
+    a hand is only reported lost after LOSS_AFTER_S seconds without fresh
+    data. This is how to find a glove's cutoff time: the receiver's [stats]
+    ratio freezes when a glove goes silent, it does not drop to 0%."""
+
+    def __init__(self, names=("LEFT", "RIGHT"), loss_after_s=LOSS_AFTER_S):
+        self.loss_after_s = loss_after_s
+        self.hands = {n: {"stale_since": None, "lost": False, "episodes": 0,
+                          "longest": 0.0} for n in names}
+
+    def update(self, now, valid_by_name):
+        """now: monotonic seconds. Returns a list of (hand, kind, since, dur)
+        tuples: kind is "lost" (since = when data stopped) or "back" (dur =
+        length of the outage in seconds)."""
+        out = []
+        for name, valid in valid_by_name.items():
+            h = self.hands[name]
+            if valid:
+                if h["lost"]:
+                    dur = now - h["stale_since"]
+                    h["longest"] = max(h["longest"], dur)
+                    out.append((name, "back", h["stale_since"], dur))
+                h["stale_since"], h["lost"] = None, False
+            else:
+                if h["stale_since"] is None:
+                    h["stale_since"] = now
+                if not h["lost"] and now - h["stale_since"] >= self.loss_after_s:
+                    h["lost"] = True
+                    h["episodes"] += 1
+                    out.append((name, "lost", h["stale_since"], 0.0))
+        return out
+
+    def finish(self, now):
+        """Close any outage still open at the end of the run."""
+        for h in self.hands.values():
+            if h["lost"]:
+                h["longest"] = max(h["longest"], now - h["stale_since"])
+
+
+def clock(mono, t0, wall0):
+    return time.strftime("%H:%M:%S", time.localtime(wall0 + (mono - t0)))
 
 
 def fmt_hand(name, hand, valid):
@@ -94,8 +140,11 @@ def main():
         print(f"Listening on {cfg.serial_port} @ {cfg.serial_baud} baud (Ctrl+C to stop)")
 
     left, right = HandStats(), HandStats()
+    events = LinkEvents()
+    wall0 = time.time()
     state = {"frames": 0, "last_frame_t": None, "stop": False}
     t0 = time.monotonic()
+    print(f"Started at {clock(t0, t0, wall0)}")
 
     def watchdog():
         while not state["stop"]:
@@ -119,6 +168,14 @@ def main():
             state["last_frame_t"] = now
             left.update(frame["left"], frame["left_valid"])
             right.update(frame["right"], frame["right_valid"])
+            for name, kind, since, dur in events.update(
+                    now, {"LEFT": frame["left_valid"], "RIGHT": frame["right_valid"]}):
+                if kind == "lost":
+                    print(f"[{clock(now, t0, wall0)}] {name} glove: no fresh data since "
+                          f"{clock(since, t0, wall0)} (t={since - t0:.1f}s)")
+                else:
+                    print(f"[{clock(now, t0, wall0)}] {name} glove: fresh data again "
+                          f"after {dur:.1f}s")
 
             if now - last_print >= args.interval:
                 rate = (state["frames"] - frames_at_last_print) / (now - last_print)
@@ -135,6 +192,7 @@ def main():
     finally:
         state["stop"] = True
 
+    events.finish(time.monotonic())
     elapsed = max(time.monotonic() - t0, 1e-9)
     n = state["frames"]
     print("\n===== Summary =====")
@@ -143,7 +201,10 @@ def main():
         print("No frames received. Nothing to evaluate.")
         return
     for name, h in (("Left ", left), ("Right", right)):
-        print(f"{name}: fresh in {100.0 * h.valid / n:5.1f}% of frames | glove seq gaps seen: {h.seq_gaps}")
+        ev = events.hands[name.strip().upper()]
+        still = " (STILL LOST at end of run)" if ev["lost"] else ""
+        print(f"{name}: fresh in {100.0 * h.valid / n:5.1f}% of frames | glove seq gaps seen: {h.seq_gaps}"
+              f" | outages >{LOSS_AFTER_S:.0f}s: {ev['episodes']} (longest {ev['longest']:.1f}s){still}")
         for i in range(5):
             spread = h.flex_max[i] - h.flex_min[i]
             flag = "  <-- small spread (flex didn't move, or sensor not responding?)" if spread < FLEX_SPREAD_WARN else ""

@@ -187,17 +187,33 @@ of hardware troubleshooting will fix a software problem.
 
 ## Part 9 — Run against the real, wired-up hardware
 
+First, confirm data is actually arriving. From `pi-side/`, with the venv
+active and both gloves and the receiver powered:
+
+```bash
+python tools/live_view.py --port /dev/ttyAMA0 --duration 30
+```
+
+**Expected:** a line of values for each hand twice a second, a frame rate
+near 50 Hz, and a summary at the end. Move your fingers and the numbers
+should change.
+
+**If it prints `No frames for ...s`:** nothing is reaching the Pi. Almost
+always the UART wiring — double check TX/RX are actually crossed (receiver
+TX → Pi RX, receiver RX → Pi TX), not wired straight-through — or the wrong
+port or baud.
+
+Then confirm the main app starts:
+
 ```bash
 python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 -v
 ```
 
-**Expected:** continuous log output with no errors, no long silences, and
-no crashes. You'll see a warning that no model is loaded — that's correct
-and expected at this stage, since you haven't trained one yet.
-
-**If it hangs with zero output:** almost always the UART wiring — double
-check TX/RX are actually crossed (receiver TX → Pi RX, receiver RX → Pi
-TX), not wired straight-through.
+**Expected:** a couple of startup lines ("Opened serial link…") and a
+warning that no model is loaded — that is correct at this stage. With no
+model the app prints **nothing per frame**, so silence after those lines
+does not mean the link is dead (that is what `live_view.py` is for). Any
+`Dropped a corrupt/misframed payload` lines are worth reporting.
 
 Press `Ctrl+C` to stop.
 

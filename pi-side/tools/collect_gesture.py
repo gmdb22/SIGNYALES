@@ -1,7 +1,7 @@
 """
 Signyales — Gesture Data Collection Tool
 ==========================================
-Layer: feeds the training pipeline (signyales_training/). Records
+Layer: feeds the training pipeline (training/). Records
 labeled repetitions of a single gesture, one at a time, via the same
 receiver-dongle UART link the hub application uses at runtime.
 
@@ -20,7 +20,7 @@ a perfectly fixed speed.
 
 Usage:
     python tools/collect_gesture.py --label kumusta --reps 20 \\
-        --out ../signyales_training/data
+        --out ../training/data
 
     # Dry run of the TOOL itself (not for building a real dataset):
     python tools/collect_gesture.py --label test --reps 3 --simulate
@@ -86,7 +86,7 @@ def main():
     p = argparse.ArgumentParser(description="Record labeled gesture windows for training")
     p.add_argument("--label", required=True, help="Gesture label, e.g. 'kumusta'")
     p.add_argument("--reps", type=int, default=20, help="Number of repetitions to record")
-    p.add_argument("--out", default="../signyales_training/data", help="Output data root directory")
+    p.add_argument("--out", default="../training/data", help="Output data root directory")
     p.add_argument("--port", default=None)
     p.add_argument("--baud", type=int, default=None)
     p.add_argument("--simulate", action="store_true",

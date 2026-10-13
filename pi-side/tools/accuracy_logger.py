@@ -102,7 +102,7 @@ def main():
     classifier = GestureClassifier(cfg.model_dir)
     if not classifier.available:
         print(f"FATAL: no usable model at '{cfg.model_dir}'. Train and export one first "
-              f"(see signyales_training) before running accuracy tests.")
+              f"(see training/) before running accuracy tests.")
         return
 
     if args.simulate:

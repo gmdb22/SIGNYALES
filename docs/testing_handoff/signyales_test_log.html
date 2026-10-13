@@ -269,9 +269,9 @@ const STAGES = [
   { id: "7c", num: "7c", title: "Training-readiness checks",
     hint: "Left/right alignment result, repeatability notes, whether calibration survived a power cycle, and the 30-minute live_view.py summary." },
   { id: "8",  num: "8",  title: "Battery test",
-    hint: "Battery type/capacity, start time, and the time each glove's delivery ratio dropped to 0%. Note if still running at 3h." },
+    hint: "Battery type/capacity, start time, and each glove's 'no fresh data' time from live_view.py (the receiver [stats] ratio freezes, it does not drop to 0%). Note if still running at 3h." },
   { id: "9",  num: "9",  title: "Range test (3 trials per position)",
-    hint: "Power-cycle between trials. Paste the [stats] line from each trial at 1m, 3m, 5m, 10m, 5m with a wall/door, and 5m with the receiver behind your body." }
+    hint: "Power-cycle between trials. Paste the [stats] line from each trial at 1m, 3m, 5m, 10m, 5m with a wall/door, and 5m with the receiver behind your body. Add live_view.py 'fresh in' % if you ran it (label it separately)." }
 ];
 
 const STORAGE_KEY = "signyales_test_log_v2";

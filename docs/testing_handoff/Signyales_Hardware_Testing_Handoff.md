@@ -351,17 +351,24 @@ These confirm the hardware gives data that is safe to train on. Run from
 
 1. Fully charge both gloves. Note the battery type and capacity printed
    on it.
-2. Start both gloves, the receiver, and the Pi hub together, and leave
-   them running continuously with the gloves worn or held still.
-3. Note the start time. Check the receiver's `[stats]` line every 15
-   minutes.
-4. Record the time each glove stops transmitting (its delivery ratio
-   drops to 0%).
-5. If a glove is still running after 3 hours, stop there and report that
-   rather than continuing indefinitely.
+2. Start the receiver and both gloves. On the Pi, from `pi-side/` with the
+   venv active, start the live viewer for up to 3 hours, one status line
+   every 5 minutes:
+   ```bash
+   python tools/live_view.py --port /dev/ttyAMA0 --duration 10800 --interval 300
+   ```
+   Leave the gloves worn or held still. Don't run `main.py` at the same
+   time: two programs can't both reliably read the same serial port.
+3. Note the start time (the viewer prints `Started at HH:MM:SS`).
+4. When a glove stops sending, the viewer prints a line such as
+   `[14:05:22] LEFT glove: no fresh data since 14:05:20`. Record that time
+   for each glove. **Don't use the receiver's `[stats]` ratio for this:** it
+   freezes at its last value when a glove goes silent, it does not drop to 0%.
+5. The run ends by itself after 3 hours. If a glove is still running then,
+   report that rather than continuing indefinitely.
 
-**Report:** battery details, start time, and the cutoff time for each
-glove.
+**Report:** battery details, start time, the cutoff time for each glove (the
+`no fresh data` lines), and the viewer's final summary.
 
 ---
 
@@ -390,7 +397,20 @@ receiver code, not from running it on hardware.)
 (run from `pi-side/`) logs the stats line to a CSV for later averaging. This
 tool has not been tested against real hardware.
 
-**Report:** the `[stats]` line for every trial (3 per position).
+**Limitation:** the `[stats]` ratio only counts a packet as dropped when a
+*later* packet arrives and reveals the gap. Packets lost at the very end of
+a hold (for instance a glove sliding out of range) are never counted, so at
+the edge of range the ratio can overstate delivery. If the Pi is reachable
+at the same time, you can also run
+`python tools/live_view.py --port /dev/ttyAMA0 --duration 40` during each
+trial (receiver USB on the laptop, UART on the Pi, so both work together).
+Its `fresh in X%` means a packet arrived within the receiver's 30 ms window,
+which is a different measure from `[stats]`, so report both and label each.
+Start it first, then power on the gloves: the seconds before they connect
+count as not fresh.
+
+**Report:** the `[stats]` line for every trial (3 per position), plus the
+viewer's `fresh in` percentages if you ran it.
 
 ---
 
