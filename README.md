@@ -236,3 +236,4 @@ Dated team notes live in [`docs/Signyales_Project_Log.md`](docs/Signyales_Projec
 project updates go from lockin-start-here to main 
 hardware testing handoff goes to the hardware-handoff branch 
 ONLY SHARE THE hardware-handoff REPO 
+can do changes on lockin-start-here but any changes during testing should be done in branch hardware-handoff
