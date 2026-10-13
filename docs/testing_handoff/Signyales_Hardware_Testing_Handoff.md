@@ -24,7 +24,49 @@ report back.
 
 ---
 
-## Testing proceeds in these stages (1 to 9, including 1b and 7b), in this exact order
+## Before you start, and what to watch for
+
+**Safety first: do these before powering anything.**
+
+- [ ] **Voltage dividers:** with a multimeter, check each flex sensor's divider output while relaxed and fully bent. It must stay within 0 to 3.3 V. The ESP32 pins are not 5 V tolerant, and one wiring mistake can damage a board.
+- [ ] **Battery polarity:** confirm the LiPo's polarity matches your board's battery connector before plugging it in. A reversed battery can destroy the board.
+- [ ] **UART wiring:** receiver TX goes to Pi RX and receiver RX to Pi TX (crossed), plus a shared ground, on the Pi's 3.3 V logic pins only: Pi pins 8 and 10, ground on pin 6. Straight-through wiring gives silence, not an error.
+- [ ] **Pi 5 power and cooling:** use the 27 W USB-C supply and the active cooler. A throttling Pi can look like a software fault.
+- [ ] **Battery safety:** if a battery swells, gets hot or smells, unplug it and stop testing. Report it.
+
+**While testing, watch for:**
+
+*Gloves*
+- Calibration: each finger's printed min/max should span several hundred counts or more. A tiny spread means a dead or floating sensor. After calibration, that sensor shows up as wild noise rather than flat, so check the min/max at calibration time (Stage 2), not the live values later.
+- A glove that was never calibrated uses placeholder bounds, so its values aren't trustworthy. Don't recalibrate in the middle of a recording session: it changes the value scale, and older recordings won't match newer ones.
+- `MPU6050 not found` means the glove halts at startup. Check the IMU wiring and that AD0 is tied to ground.
+- IMU values stuck flat at a maximum during fast movement mean the sensor range is saturating (accelerometer set to 4 g, gyro to 500 degrees per second). Report it.
+
+*Wireless link*
+- `ratio=0.0%` means that glove has never been heard. The most likely cause is a wrong `RECEIVER_MAC` (Stage 1b).
+- Test with the gloves worn and the hands moving, not still on a bench: motion and the body can expose problems a bench test hides.
+- The receiver's `[stats]` ratio is cumulative since boot and freezes when a glove goes silent. Use `live_view.py` for cutoff times, and power-cycle between range trials.
+- Keep the receiver and Pi in one fixed spot, and note where you tested. Other 2.4 GHz devices (Wi-Fi, Bluetooth) can change range results.
+
+*Raspberry Pi*
+- Use `/dev/ttyAMA0`, not `/dev/serial0`, and confirm it with the loopback test (Stage 5) first.
+- Baud must be 460800 on both ends. Only one program can read the UART at a time.
+- With no model loaded, the main app prints nothing per frame. Use `live_view.py` to see data. A frame rate far below about 50 Hz means drops or stalls.
+
+*Data quality (matters before training)*
+- Move only one hand and confirm only that side's values change.
+- Repeats of the same gesture should cluster closely (Stage 7b and 7c).
+- Calibration should survive a power cycle (Stage 7c).
+
+**How to record what you see**
+
+- Copy raw numbers and pasted output into the log form, not summaries.
+- Record the repo version (`git rev-parse --short HEAD`), the Pi model, and the PlatformIO version.
+- If anything looks wrong, stop and report the exact output instead of editing firmware yourself.
+
+---
+
+## Testing proceeds in these stages (1 to 9, including 1b, 7b and 7c), in this exact order
 
 Do not skip ahead — each stage assumes the previous one already works. If a
 later stage fails, the most likely cause is something in an earlier stage
@@ -32,7 +74,9 @@ that looked fine but wasn't.
 
 ### Stage 1 — Confirm the code compiles (no hardware needed yet)
 
-Open the repo folder in VSCode. In the terminal:
+Open the repo folder in VSCode. In a PlatformIO terminal:
+
+(ctrl + shit + P : search PlatformIO)
 
 ```bash
 cd firmware/glove
@@ -431,7 +475,7 @@ Stage 7b (real data):        PASS / FAIL — [notes]
 Stage 7c (readiness checks): alignment OK/NOT OK | repeatability notes | calibration kept after power cycle Y/N | 30-min run summary
 Stage 8 (battery):           left ___ min, right ___ min (or still running at 3h)
 Stage 9 (range, 3 trials each): 1m ___ | 3m ___ | 5m ___ | 10m ___ | wall ___ | body ___
-Pi model / PlatformIO version: ___ / ___
+Pi model / PlatformIO version / repo commit: ___ / ___ / ___
 ```
 
 ## One general rule while testing

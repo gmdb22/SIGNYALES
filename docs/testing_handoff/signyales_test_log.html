@@ -231,6 +231,10 @@
       <label class="field-label" for="pioVersion">PlatformIO version</label>
       <input type="text" id="pioVersion" placeholder="Output of: pio --version">
     </div>
+    <div class="meta-field">
+      <label class="field-label" for="repoCommit">Repo commit</label>
+      <input type="text" id="repoCommit" placeholder="Output of: git rev-parse --short HEAD">
+    </div>
   </div>
 
   <div id="stages"></div>
@@ -344,10 +348,13 @@ dateInput.value = state.testDate || "";
 nameInput.addEventListener("input", () => { state.testerName = nameInput.value; saveState(state); });
 const piInput = document.getElementById("piModel");
 const pioInput = document.getElementById("pioVersion");
+const commitInput = document.getElementById("repoCommit");
 piInput.value = state.piModel || "";
 pioInput.value = state.pioVersion || "";
+commitInput.value = state.repoCommit || "";
 piInput.addEventListener("input", () => { state.piModel = piInput.value; saveState(state); });
 pioInput.addEventListener("input", () => { state.pioVersion = pioInput.value; saveState(state); });
+commitInput.addEventListener("input", () => { state.repoCommit = commitInput.value; saveState(state); });
 dateInput.addEventListener("input", () => { state.testDate = dateInput.value; saveState(state); });
 
 function statusLabel(val) {
@@ -364,6 +371,7 @@ document.getElementById("generateBtn").addEventListener("click", () => {
   lines.push("Date: " + (dateInput.value || "(not given)"));
   lines.push("Raspberry Pi model: " + (piInput.value || "(not given)"));
   lines.push("PlatformIO version: " + (pioInput.value || "(not given)"));
+  lines.push("Repo commit: " + (commitInput.value || "(not given)"));
   lines.push("");
   STAGES.forEach((stage, i) => {
     const s = state["stage_" + stage.id] || {};
