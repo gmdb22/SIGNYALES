@@ -231,3 +231,8 @@ Each subfolder has its own README with full details — this file is just the
 map.
 
 Dated team notes live in [`docs/Signyales_Project_Log.md`](docs/Signyales_Project_Log.md).
+
+**REMINDER** 
+project updates go from lockin-start-here to main 
+hardware testing handoff goes to the hardware-handoff branch 
+ONLY SHARE THE hardware-handoff REPO 
