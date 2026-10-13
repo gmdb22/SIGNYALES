@@ -126,7 +126,8 @@ class GestureClassifier:
             # Quantized model: apply the input tensor's quantization
             # params rather than feeding it raw floats.
             scale, zero_point = self.input_details[0]["quantization"]
-            x = (x / scale + zero_point).astype(input_dtype)
+            info = np.iinfo(input_dtype)
+            x = np.clip(np.round(x / scale + zero_point), info.min, info.max).astype(input_dtype)
         else:
             x = x.astype(input_dtype)
 
@@ -134,6 +135,14 @@ class GestureClassifier:
         self.interpreter.set_tensor(self.input_details[0]["index"], x)
         self.interpreter.invoke()
         output = self.interpreter.get_tensor(self.output_details[0]["index"])[0]
+
+        if output.dtype in (np.int8, np.uint8):
+            # Quantized output: convert back to real-valued probabilities
+            # using the output tensor's scale/zero-point. Without this the
+            # "confidence" would be a raw integer (e.g. -128..127) and any
+            # confidence threshold would be meaningless.
+            out_scale, out_zero = self.output_details[0]["quantization"]
+            output = (output.astype(np.float32) - out_zero) * out_scale
 
         idx = int(np.argmax(output))
         confidence = float(output[idx])
