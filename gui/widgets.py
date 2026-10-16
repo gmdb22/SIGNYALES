@@ -4,7 +4,9 @@ and the speaker used by every view.
 """
 
 import queue
+import re
 import threading
+import time
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import scrolledtext, ttk
@@ -18,6 +20,8 @@ BAD = "#b3412c"
 WARN = "#b06a12"
 PANEL_BG = "#10161c"
 PANEL_FG = "#f4f6f8"
+
+_BAD_WORD = re.compile(r"\bFAIL(ED)?\b|ERROR\b|\bTRACEBACK\b")
 
 STATUS_STYLE = {
     "idle": ("Not run", MUTED), "running": ("Running...", WARN), "pass": ("PASS", OK),
@@ -41,7 +45,7 @@ class LogBox(ttk.Frame):
             up = line.upper().lstrip()
             if up.startswith(("PASS", "OK:", "ALL ")) and "FAIL" not in up:
                 tag = "pass"
-            elif "FAIL" in up or "ERROR" in up or "TRACEBACK" in up:
+            elif _BAD_WORD.search(up):
                 tag = "fail"
         self.text.configure(state="normal")
         self.text.insert("end", line + "\n", (tag,) if tag else ())
@@ -166,6 +170,14 @@ class HandStatus(ttk.Frame):
         self.fps.configure(text="")
 
 
+def _safe(fn):
+    if fn is not None:
+        try:
+            fn()
+        except Exception:
+            pass
+
+
 class Speaker:
     """
     Speaks words in order on one background thread. The hub's TTSEngine is
@@ -181,22 +193,31 @@ class Speaker:
 
     def _loop(self):
         ensure_pi_side_on_path()
+        engine = None
         try:
             from signyales_hub.tts_engine import TTSEngine
             engine = TTSEngine()
             self.backend = engine.backend
         except Exception as exc:
             self._on_message(f"Speech unavailable: {exc}")
-            return
         while True:
-            text = self._q.get()
-            if text is None:
+            item = self._q.get()
+            if item is None:
                 break
-            if not engine.speak_blocking(text):
+            text, on_start, on_done = item
+            _safe(on_start)
+            if not text.strip():
+                pass                     # marker item: callbacks only, nothing to say
+            elif engine is None:
+                time.sleep(0.8)          # keep any on-screen sequence readable without sound
+            elif not engine.speak_blocking(text):
                 self._on_message(f"Speech failed for '{text}' (backend {engine.backend}).")
+            _safe(on_done)
 
-    def say(self, text):
-        self._q.put(text)
+    def say(self, text, on_start=None, on_done=None):
+        """Queues text. on_start / on_done are called (on the speech thread)
+        just before and just after it is spoken; wrap any Tk work in app.call."""
+        self._q.put((text, on_start, on_done))
 
     def close(self):
         self._q.put(None)

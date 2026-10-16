@@ -19,7 +19,8 @@ from core.live import LivePipeline, load_classifier, make_source
 from core.procs import ProcessRunner
 from widgets import STATUS_STYLE, HandStatus, LogBox, SubtitlePanel
 
-OUTPUT_PHRASE = "Signyales speaker test. Salamat. Kumusta."
+OUTPUT_INTRO = "Signyales speaker test."
+OUTPUT_WORDS = ["salamat", "kumusta"]
 
 
 class TestingView(ttk.Frame):
@@ -177,14 +178,22 @@ class TestingView(ttk.Frame):
 
     # ---------------------------------------------------------------- tools
     def output_check(self):
+        """Says an intro, then each test word while that word is on screen, as
+        the live app does when it recognizes a sign."""
         self.log.append("=== Subtitle and speaker check", "head")
+        self.log.append(f'Speaking "{OUTPUT_INTRO}", then each word while it is shown above: '
+                        + ", then ".join(OUTPUT_WORDS) + ".")
+        self.log.append("Write down: readable from about 2 m? Did each word on screen match what you "
+                        "heard? Which speaker?", "muted")
+        call = self.app.call
         self.subtitle.idle()
-        self.app.after(1500, lambda: self.subtitle.show("salamat"))
-        self.app.speaker.say(OUTPUT_PHRASE)
-        self.log.append(f'Showing "salamat" above and speaking: "{OUTPUT_PHRASE}"')
-        self.log.append("Write down: readable from about 2 m? Did you hear the whole phrase, "
-                        "and through which speaker?", "muted")
-        self.app.after(6000, self.subtitle.idle)
+        self.app.speaker.say(OUTPUT_INTRO)
+        for word in OUTPUT_WORDS:
+            self.app.speaker.say(word, on_start=lambda w=word: call(self.subtitle.show, w),
+                                 on_done=lambda: time.sleep(0.6))
+        self.app.speaker.say("", on_start=lambda: call(self.subtitle.idle),
+                             on_done=lambda: call(self.log.append, "=== Subtitle and speaker check: done "
+                                                  "(listen-and-look check, no automatic PASS)", "head"))
 
     def toggle_simulation(self):
         if self.pipeline and self.pipeline.running:
