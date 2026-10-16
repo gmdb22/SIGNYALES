@@ -13,7 +13,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from core import tasks
+from core import recorder, tasks
 from core.env import PI_SIDE, REPO_ROOT
 from core.live import LivePipeline, load_classifier, make_source
 from core.procs import ProcessRunner
@@ -240,8 +240,8 @@ class TestingView(ttk.Frame):
     def inspect(self):
         if self.busy():
             return
-        folder = filedialog.askdirectory(title="Recorded data folder (with one subfolder per word)",
-                                         initialdir=str(REPO_ROOT / "training" / "data"))
+        folder = self._pick_data_folder("Recorded data folder (one subfolder per word, e.g. W01_S01)",
+                                        need_two=False)
         if folder:
             cmd, cwd = tasks.inspect_cmd(folder)
             self._run(cmd, cwd, f"Inspect recordings: {folder}")
@@ -249,12 +249,14 @@ class TestingView(ttk.Frame):
     def train(self):
         if self.busy():
             return
-        data = filedialog.askdirectory(title="1/2: Data folder to train on (one subfolder per word)",
-                                       initialdir=str(REPO_ROOT / "training" / "data"))
+        data = self._pick_data_folder("1/2: Data to train on: a session folder such as W01_S01 "
+                                      "(one subfolder per word)", need_two=True)
         if not data:
             return
-        out = filedialog.askdirectory(title="2/2: Output folder for the model (outside the repo)",
-                                      initialdir=str(Path.home()))
+        recorder.MODELS_HOME.mkdir(exist_ok=True)
+        out = filedialog.askdirectory(title="2/2: Output folder for the model (outside the repo). "
+                                            "Make a new folder, e.g. test1, and open it",
+                                      initialdir=str(recorder.MODELS_HOME), mustexist=False)
         if not out:
             return
         try:
@@ -269,6 +271,21 @@ class TestingView(ttk.Frame):
                                        "(simpler; fine on the Pi 5).")
         cmd, cwd = tasks.train_cmd(data, out, quantize)
         self._run(cmd, cwd, "Train model", on_success=lambda: self._show_report(Path(out)))
+
+    def _pick_data_folder(self, title, need_two):
+        """Asks for a recordings folder and checks it before anything runs."""
+        start = recorder.DATA_HOME if recorder.DATA_HOME.is_dir() else REPO_ROOT / "training" / "data"
+        folder = filedialog.askdirectory(title=title, initialdir=str(start))
+        if not folder:
+            return None
+        ok, message, words = recorder.describe_data_folder(folder)
+        if words:
+            self.log.append(f"Data folder {folder}: " + ", ".join(f"{w} ({n})" for w, n in words.items()),
+                            "muted")
+        if ok or (words and not need_two):
+            return folder
+        messagebox.showwarning("Check the data folder", message)
+        return None
 
     def _show_report(self, out):
         try:

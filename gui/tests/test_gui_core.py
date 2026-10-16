@@ -163,6 +163,27 @@ with tempfile.TemporaryDirectory() as tmp:
     rec.cancel_rep()
     check("recorder: frame_count is 0 when not recording", rec.frame_count == 0)
 
+# ---------------------------------------------------------------- data folder check
+with tempfile.TemporaryDirectory() as tmp:
+    root = Path(tmp)
+    ok, msg, _ = recorder.describe_data_folder(root)
+    check("data folder: empty folder is refused with a hint", not ok and "No recordings" in msg)
+    sess = root / "W01_S01"
+    for word in ("salamat", "oo"):
+        (sess / word).mkdir(parents=True)
+        np.savez(sess / word / "rep_0000.npz", features=np.zeros((50, 22), np.float32), label=word)
+    ok, msg, words = recorder.describe_data_folder(root)
+    check("data folder: picking the parent of sessions is explained", not ok and "W01_S01" in msg, msg)
+    ok, msg, words = recorder.describe_data_folder(sess)
+    check("data folder: a session folder with 2 words is accepted", ok and words == {"oo": 1, "salamat": 1},
+          words)
+    ok, msg, words = recorder.describe_data_folder(sess / "salamat")
+    check("data folder: a single word folder is refused", not ok)
+    (sess / "_stage7b").mkdir()
+    np.savez(sess / "_stage7b" / "rep_0000.npz", features=np.zeros((50, 22), np.float32), label="x")
+    ok, msg, words = recorder.describe_data_folder(sess)
+    check("data folder: '_' folders are not counted (like training)", "_stage7b" not in words)
+
 # ---------------------------------------------------------------- mirror
 received, disconnected = [], []
 server = mirror.MirrorServer(host="127.0.0.1", port=0)

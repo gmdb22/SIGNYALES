@@ -107,3 +107,32 @@ class GestureRecorder:
             path = label_dir / f"rep_{idx:04d}.npz"
         np.savez(path, features=window, label=label)
         return path, len(buf)
+
+
+DATA_HOME = Path.home() / "signyales_data"
+MODELS_HOME = Path.home() / "signyales_models"
+
+
+def describe_data_folder(folder):
+    """
+    Checks a folder picked for training or inspecting. Returns
+    (ok, message, words) where words maps each usable word folder to its
+    number of rep_*.npz files.
+    """
+    folder = Path(folder)
+    if not folder.is_dir():
+        return False, f"{folder} does not exist.", {}
+    subdirs = [d for d in sorted(folder.iterdir()) if d.is_dir() and not d.name.startswith(("_", "."))]
+    words = {d.name: len(list(d.glob("rep_*.npz"))) for d in subdirs}
+    words = {w: n for w, n in words.items() if n}
+    if words:
+        if len(words) < 2:
+            return False, (f"Only one word here ({', '.join(words)}). Training needs at least 2 different "
+                           "words. Record another word into this same folder first."), words
+        return True, "", words
+    nested = [d for d in subdirs if any(dd.is_dir() and any(dd.glob("rep_*.npz")) for dd in d.iterdir())]
+    if nested:
+        return False, ("This folder holds recording sessions, not words. Open one session folder, "
+                       f"e.g. {nested[0].name}, which contains one folder per word."), {}
+    return False, ("No recordings here. Pick the folder that contains one folder per word "
+                   f"(e.g. {DATA_HOME / 'W01_S01'})."), {}
