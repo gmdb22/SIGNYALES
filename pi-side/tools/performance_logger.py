@@ -67,7 +67,8 @@ def main():
     classifier = GestureClassifier(cfg.model_dir, expected_window=cfg.window_size_samples,
                                    expected_features=cfg.feature_count)
     window = WindowBuffer(cfg.window_size_samples, cfg.feature_count)
-    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold)
+    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold,
+                                 silent_labels=cfg.silent_labels)
 
     if args.simulate:
         source = SimulatedFrameSource(rate_hz=50)

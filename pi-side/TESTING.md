@@ -43,6 +43,11 @@ timeout — worth distinguishing from a wrong answer when writing up results,
 since it points at a different problem (recognition too slow/uncertain,
 rather than confusing two specific gestures).
 
+If the model has a rest class whose label is listed in `silent_labels` in
+`signyales_hub/config.py` (default `rest`), a confirmed rest is never
+reported as a gesture, so a trial where only rest was recognized is also
+recorded as `no_response`. Don't include the rest label in `--gestures`.
+
 ## Performance logging
 
 ```

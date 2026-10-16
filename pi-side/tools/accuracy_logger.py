@@ -47,7 +47,8 @@ def run_trial(source_iter, cfg, classifier, timeout_s):
     Returns (predicted_label_or_NO_RESPONSE, confidence, latency_s).
     """
     window = WindowBuffer(cfg.window_size_samples, cfg.feature_count)
-    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold)
+    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold,
+                                 silent_labels=cfg.silent_labels)
 
     start = time.monotonic()
     frame_count = 0

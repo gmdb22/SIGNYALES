@@ -16,9 +16,13 @@ log = logging.getLogger("signyales.debounce")
 
 
 class GestureDebouncer:
-    def __init__(self, required_consecutive: int, confidence_threshold: float):
+    def __init__(self, required_consecutive: int, confidence_threshold: float,
+                 silent_labels=()):
         self.required_consecutive = required_consecutive
         self.confidence_threshold = confidence_threshold
+        # Labels meaning "no sign" (see HubConfig.silent_labels): never
+        # returned, but a confirmed one re-arms repeat detection.
+        self.silent_labels = frozenset(silent_labels)
         self._candidate_label = None
         self._candidate_count = 0
         self._last_emitted = None
@@ -41,6 +45,13 @@ class GestureDebouncer:
             self._candidate_count = 1
 
         if self._candidate_count >= self.required_consecutive:
+            if label in self.silent_labels:
+                # Confirmed rest: say nothing, but allow the next real
+                # gesture to be spoken even if it repeats the last one.
+                if self._last_emitted is not None:
+                    log.debug("Rest label '%s' confirmed; repeat detection re-armed", label)
+                self._last_emitted = None
+                return None
             if label != self._last_emitted:
                 self._last_emitted = label
                 log.info("Stable gesture confirmed: %s (confidence=%.2f)", label, confidence)

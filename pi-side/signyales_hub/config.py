@@ -54,6 +54,18 @@ class HubConfig:
     debounce_required_consecutive: int = 3  # consecutive agreeing inferences
                                              # needed before a gesture is "spoken"
 
+    # --- Labels that mean "no sign" ---
+    # A model trained with a rest/idle class (recorded like any other
+    # gesture, e.g. collect_gesture.py --label rest) needs somewhere to go
+    # when nobody is signing. Labels listed here are never printed or
+    # spoken. When one is confirmed by the debouncer (same rules as a real
+    # gesture), it re-arms the debouncer, so the same word signed twice
+    # with a rest in between is spoken twice. Has no effect if the model's
+    # labels.json contains none of these names. Which motions count as
+    # rest, and what the label is called, is a data-collection decision
+    # (finding F4); keep this list in sync with it.
+    silent_labels: tuple = ("rest",)
+
     # --- Frame freshness (mirrors the receiver's own concept) ---
     # If BOTH hands are marked invalid in an incoming frame, it's treated
     # as "no signal" and does not advance the inference window — this
