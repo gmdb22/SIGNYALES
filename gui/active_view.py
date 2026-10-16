@@ -259,10 +259,10 @@ class PiActiveView(ttk.Frame):
         self._space_held = False
         self.app.bind("<KeyPress-space>", self._space)
         self.app.bind("<KeyRelease-space>", self._space_up)
-        # If the big button has keyboard focus anyway, stop its built-in Space action
-        # (which would toggle a second time) and handle the key once here.
-        self.k_button.bind("<KeyPress-space>", self._space)
-        self.k_button.bind("<KeyRelease-space>", lambda e: (self._space_up(e), "break")[1])
+        # On Windows a clicked button keeps the keyboard focus, and Space would
+        # "press" it (e.g. Connect again). On this tab Space only means START/STOP:
+        # take it over on every button and tick box here, before their own action.
+        self._claim_space(tab)
         self.app.bind("<Escape>", self._escape)
 
     def _out_dir(self):
@@ -277,6 +277,7 @@ class PiActiveView(ttk.Frame):
             return                       # keep the existing recorder attached
         self.recorder = recorder.GestureRecorder(out)
         self.pipeline.add_frame_listener(self.recorder.on_frame)
+        self.record_tab.focus_set()      # take keyboard focus off the Connect button
         self.k_state.configure(text=f"Connecting... saving to {out}", foreground=MUTED)
         self._update_counts()
 
@@ -357,6 +358,14 @@ class PiActiveView(ttk.Frame):
 
     def _space_up(self, event):
         self._space_held = False
+
+    def _claim_space(self, widget):
+        """Binds Space to START/STOP on all buttons and tick boxes under widget."""
+        for child in widget.winfo_children():
+            if isinstance(child, (tk.Button, ttk.Button, ttk.Checkbutton, tk.Checkbutton)):
+                child.bind("<KeyPress-space>", self._space)
+                child.bind("<KeyRelease-space>", lambda e: (self._space_up(e), "break")[1])
+            self._claim_space(child)
 
     def _escape(self, event):
         if self.recorder and self.recorder.recording:
