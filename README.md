@@ -243,3 +243,25 @@ project updates go from lockin-start-here to main
 hardware testing handoff goes to the hardware-handoff branch 
 ONLY SHARE THE hardware-handoff REPO 
 can do changes on lockin-start-here but any changes during testing should be done in branch hardware-handoff
+
+## Hardware handoff: which version to test
+
+- The version for hardware testing is the tag **`handoff-2`** (commit `3f146b7`,
+  16 Oct 2026). `handoff-1` (`f4f7ad8`) is an older version; don't use it.
+- Testers: clone the repo and check out the tag, on both the laptop and the Pi:
+  ```
+  git clone https://github.com/gmdb22/SIGNYALES.git
+  cd SIGNYALES
+  git checkout handoff-2
+  git --no-pager log -1 --oneline
+  ```
+  The last line must start with `3f146b7`. A "detached HEAD" message is normal.
+  Include that line in every test report, from both machines.
+- `RECEIVER_MAC` in `firmware/glove/src/config.h` is edited locally in Stage 1b
+  and **never committed**: every receiver has its own MAC.
+- If a code fix is pushed to `hardware-handoff` during testing, tag that commit
+  with the next number (`handoff-3`, `handoff-4`, ...) and tell the tester which
+  tag to use. Commits that only change documentation, like this section, don't
+  need a new tag.
+- `hardware-handoff` is not locked on GitHub. The tags are the record of exactly
+  what was tested.
