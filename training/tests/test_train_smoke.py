@@ -65,8 +65,11 @@ def train(data: Path, out: Path = None, extra=()):
     cmd = [sys.executable, str(TRAIN), "--data-dir", str(data), "--epochs", "20", *extra]
     if out is not None:
         cmd += ["--out-dir", str(out)]
-    env = dict(os.environ, TF_CPP_MIN_LOG_LEVEL="2")
-    p = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    # Read train.py's output as UTF-8 whatever the console's code page is.
+    # TensorFlow's model summary uses box-drawing characters, which Windows'
+    # default cp1252 can't decode (seen when run from the GUI).
+    env = dict(os.environ, TF_CPP_MIN_LOG_LEVEL="2", PYTHONIOENCODING="utf-8")
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     if p.returncode != 0 and out is not None:
         print((p.stdout + p.stderr)[-3000:])
     return p
