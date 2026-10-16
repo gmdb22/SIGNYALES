@@ -64,6 +64,13 @@ Runs for a fixed duration (or until Ctrl+C) and reports:
   stable gesture being confirmed. This is *pipeline* latency, not the full
   human-gesture-to-speech latency — see the caveat in the script's own
   docstring before reporting it as the latter in your results chapter.
+- **Stage timing:** inference time per `predict()` call (mean, p95, max),
+  debounce wait per recognized gesture, and the spacing between frames
+  reaching the Pi (about 20 ms expected; much less means a backlog burst).
+  These are pieces of a latency budget measured on the Pi, not the
+  glove-to-speech latency. Add `--log-inferences` to also save every
+  inference (label, confidence, timing) to `<out>_inferences.csv`, for
+  choosing the confidence threshold and debounce count.
 
 ## Lower-level link diagnostics (optional)
 

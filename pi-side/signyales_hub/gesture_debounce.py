@@ -60,6 +60,13 @@ class GestureDebouncer:
             # window the wearer continues holding the same sign.
         return None
 
+    @property
+    def candidate_count(self) -> int:
+        """How many consecutive confident predictions the current candidate
+        label has (0 if none). Read-only; used by performance_logger to time
+        how long debouncing takes."""
+        return self._candidate_count
+
     def reset(self):
         """Call this when the input goes quiet (e.g. both hands stale)
         so a resumed session doesn't inherit stale debounce state."""
