@@ -105,6 +105,9 @@ Pi's; this command has not been tested here):
 scp <scratch folder>\model.tflite <scratch folder>\labels.json <scratch folder>\scaler.json <pi-user>@<pi-address>:<path-to-repo>/pi-side/model/
 ```
 
+Optionally copy `train_report.json` too, so `pi-side/tools/freeze_manifest.py`
+can record which training run the model came from. The hub ignores it.
+
 The three files are git-ignored, so `git pull` will never bring them over and
 they will not be committed. Copy all three together: they are one model, and
 `labels.json` and `scaler.json` must come from the same training run as the

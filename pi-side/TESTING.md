@@ -90,6 +90,22 @@ on the dongle itself from actual sequence-number gaps — a more precise,
 lower-level figure than the Pi-side ratio above, at the cost of needing
 that extra cable.
 
+## Freezing before field testing
+
+Right before the first participant session, on the machine that will run
+the sessions:
+
+```
+python tools/freeze_manifest.py --model-dir model --out results/freeze_manifest.json --strict
+```
+
+It writes the git commit, the SHA-256 of `model.tflite`, `labels.json`,
+`scaler.json` (and `train_report.json` if it was copied too), every
+`config.py` value and the installed package versions, and warns about
+uncommitted changes or a model the hub can't load. `--strict` makes any
+warning exit with code 1. Run it again (with a new `--out` name) after the
+last session: if anything differs, something changed mid-study.
+
 ## A note on battery performance
 
 None of these tools log battery data — that metric in the proposal's
