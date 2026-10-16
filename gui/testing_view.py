@@ -183,6 +183,8 @@ class TestingView(ttk.Frame):
         self.log.append("=== Subtitle and speaker check", "head")
         self.log.append(f'Speaking "{OUTPUT_INTRO}", then each word while it is shown above: '
                         + ", then ".join(OUTPUT_WORDS) + ".")
+        self.log.append(f"Speech backend: {self.app.speaker.backend or 'still starting'} "
+                        "(runs in a separate helper process)", "muted")
         self.log.append("Write down: readable from about 2 m? Did each word on screen match what you "
                         "heard? Which speaker?", "muted")
         call = self.app.call

@@ -183,6 +183,27 @@ check("mirror: laptop is told when the Pi stops sharing", wait_for(lambda: disco
 client.close()
 check("mirror: local IP list is not empty", bool(mirror.local_ip_addresses()))
 
+# ---------------------------------------------------------------- speech helper process
+import subprocess  # noqa: E402
+worker = subprocess.Popen([sys.executable, str(GUI / "core" / "speech_worker.py")], env=env.child_env(),
+                          stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                          text=True, encoding="utf-8")
+try:
+    lines = []
+    for _ in range(20):                      # skip any diagnostic lines before READY
+        line = worker.stdout.readline().strip()
+        lines.append(line)
+        if line.startswith("READY") or not line:
+            break
+    check("speech helper: starts and reports its backend", lines[-1].startswith("READY"), lines)
+    worker.stdin.write("\n")                 # empty line: nothing is spoken, so no sound in tests
+    worker.stdin.flush()
+    check("speech helper: answers each request", worker.stdout.readline().strip() == "OK")
+finally:
+    worker.stdin.close()
+    worker.wait(timeout=10)
+check("speech helper: exits when the GUI closes its input", worker.returncode == 0, worker.returncode)
+
 # ---------------------------------------------------------------- hardware helpers
 check("mac: parsed from the MAC utility's line",
       hardware.parse_mac("MAC Address: 24:6f:28:ab:cd:ef") == "24:6F:28:AB:CD:EF")

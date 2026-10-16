@@ -60,6 +60,7 @@ port continuously, so a repetition never starts with stale frames (F2).
 | `testing_view.py` | Testing mode |
 | `active_view.py` | Active mode (Pi: Recognize, Record; laptop: Mirror, Hardware helper) |
 | `widgets.py` | Log box, subtitle panel (and fullscreen), glove status, speaker |
+| `core/speech_worker.py` | Speaks for the GUI in a separate process (Windows' speech was silent from a GUI background thread) |
 | `core/` | Logic without any window code: tasks, process runner, live pipeline, recorder, mirror link, serial helpers |
 | `tests/test_gui_core.py` | Tests for `core/` (runs in CI) |
 

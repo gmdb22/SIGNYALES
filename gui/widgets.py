@@ -5,13 +5,16 @@ and the speaker used by every view.
 
 import queue
 import re
+import subprocess
+import sys
 import threading
 import time
+from pathlib import Path
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import scrolledtext, ttk
 
-from core.env import ensure_pi_side_on_path
+from core.env import IS_WINDOWS, child_env
 
 INK = "#1f2933"
 MUTED = "#5c6670"
@@ -180,26 +183,73 @@ def _safe(fn):
 
 class Speaker:
     """
-    Speaks words in order on one background thread. The hub's TTSEngine is
-    created and used on that same thread, which Windows' speech (SAPI, used
-    by pyttsx3) needs. say() never blocks the window.
+    Speaks words in order without blocking the window. The speaking itself
+    happens in a separate helper process (core/speech_worker.py) that uses
+    the hub's TTSEngine on its own main thread: on Windows, SAPI speech
+    called from a background thread of the GUI stayed silent.
+    say() never blocks; on_start / on_done run on a background thread, so
+    wrap any Tk work in app.call.
     """
 
     def __init__(self, on_message=None):
         self._q = queue.Queue()
         self._on_message = on_message or (lambda m: None)
         self.backend = None
+        self._proc = None
         threading.Thread(target=self._loop, daemon=True).start()
 
-    def _loop(self):
-        ensure_pi_side_on_path()
-        engine = None
+    def _start_worker(self):
+        worker = Path(__file__).resolve().parent / "core" / "speech_worker.py"
+        kwargs = {}
+        if IS_WINDOWS:
+            kwargs["creationflags"] = 0x08000000      # CREATE_NO_WINDOW
+        self._proc = subprocess.Popen(
+            [sys.executable, str(worker)], env=child_env(),
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding="utf-8", errors="replace", bufsize=1, **kwargs)
+        threading.Thread(target=self._pump_stderr, daemon=True).start()
+        reply = self._read_reply()
+        if reply.startswith("READY"):
+            self.backend = reply.split(" ", 1)[1] if " " in reply else "?"
+            return True
+        self._on_message(f"Speech unavailable: the speech helper did not start ({reply or 'no reply'}).")
+        return False
+
+    def _pump_stderr(self):
+        proc = self._proc
+        for line in proc.stderr:
+            line = line.rstrip()
+            if line:
+                self._on_message(f"[speech] {line}")
+
+    def _read_reply(self):
+        """Next protocol line (READY/OK/FAIL); other output is passed on as a message."""
+        while True:
+            line = self._proc.stdout.readline()
+            if not line:
+                return ""
+            line = line.strip()
+            if line.startswith(("READY", "OK", "FAIL")):
+                return line
+            if line:
+                self._on_message(f"[speech] {line}")
+
+    def _speak(self, text):
+        if self._proc is None or self._proc.poll() is not None:
+            return False
         try:
-            from signyales_hub.tts_engine import TTSEngine
-            engine = TTSEngine()
-            self.backend = engine.backend
+            self._proc.stdin.write(text.replace("\n", " ") + "\n")
+            self._proc.stdin.flush()
+        except OSError:
+            return False
+        return self._read_reply() == "OK"
+
+    def _loop(self):
+        try:
+            ok = self._start_worker()
         except Exception as exc:
             self._on_message(f"Speech unavailable: {exc}")
+            ok = False
         while True:
             item = self._q.get()
             if item is None:
@@ -208,11 +258,17 @@ class Speaker:
             _safe(on_start)
             if not text.strip():
                 pass                     # marker item: callbacks only, nothing to say
-            elif engine is None:
+            elif not ok:
                 time.sleep(0.8)          # keep any on-screen sequence readable without sound
-            elif not engine.speak_blocking(text):
-                self._on_message(f"Speech failed for '{text}' (backend {engine.backend}).")
+            elif not self._speak(text):
+                self._on_message(f"Speech failed for '{text}' (backend {self.backend}).")
             _safe(on_done)
+        if self._proc is not None and self._proc.poll() is None:
+            try:
+                self._proc.stdin.close()
+                self._proc.wait(timeout=3)
+            except Exception:
+                self._proc.kill()
 
     def say(self, text, on_start=None, on_done=None):
         """Queues text. on_start / on_done are called (on the speech thread)
