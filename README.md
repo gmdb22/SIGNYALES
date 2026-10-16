@@ -249,22 +249,23 @@ can do changes on lockin-start-here but any changes during testing should be don
 
 ## Hardware handoff: which version to test
 
-- The version for hardware testing is the tag **`handoff-2`** (commit `3f146b7`,
-  16 Oct 2026). `handoff-1` (`f4f7ad8`) is an older version; don't use it.
+- The version for hardware testing is the tag **`handoff-3`** (adds Stage 6b,
+  the subtitle and speaker check). The exact commit hash is in the tester
+  addendum. `handoff-1` and `handoff-2` are older versions; don't use them.
 - Testers: clone the repo and check out the tag, on both the laptop and the Pi:
   ```
   git clone https://github.com/gmdb22/SIGNYALES.git
   cd SIGNYALES
-  git checkout handoff-2
+  git checkout handoff-3
   git --no-pager log -1 --oneline
   ```
-  The last line must start with `3f146b7`. A "detached HEAD" message is normal.
-  Include that line in every test report, from both machines.
+  The last line must start with the hash given in the addendum. A "detached
+  HEAD" message is normal. Include that line in every test report, from both
+  machines.
 - `RECEIVER_MAC` in `firmware/glove/src/config.h` is edited locally in Stage 1b
   and **never committed**: every receiver has its own MAC.
 - If a code fix is pushed to `hardware-handoff` during testing, tag that commit
-  with the next number (`handoff-3`, `handoff-4`, ...) and tell the tester which
-  tag to use. Commits that only change documentation, like this section, don't
-  need a new tag.
+  with the next number (`handoff-4`, `handoff-5`, ...) and tell the tester which
+  tag to use. Commits that only change documentation don't need a new tag.
 - `hardware-handoff` is not locked on GitHub. The tags are the record of exactly
   what was tested.

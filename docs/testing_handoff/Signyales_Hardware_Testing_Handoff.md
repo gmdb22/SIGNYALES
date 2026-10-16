@@ -19,6 +19,7 @@ report back.
 - [ ] [VSCode](https://code.visualstudio.com/) installed, plus its **PlatformIO IDE** extension (search for it in VSCode's Extensions panel)
 - [ ] The assembled hardware: 2 gloves, 1 receiver dongle, 1 Raspberry Pi 5 — see `docs/Signyales_Hardware_Assembly_Guide.docx` in the repo for wiring diagrams if anything isn't assembled yet
 - [ ] A USB cable for each ESP32 board (gloves + receiver) to connect to your computer
+- [ ] A speaker for the Pi, for Stage 6b. A USB speaker is easiest: the Raspberry Pi 5 has **no 3.5 mm audio jack**, so a plug-in speaker needs a USB sound adapter, or use a monitor with speakers over HDMI
 - [ ] Write down, before starting: which Raspberry Pi model you have (this project uses a Raspberry Pi 5; tell us if yours is different) and your PlatformIO version (`pio --version`)
 - [ ] Basic comfort with a terminal — every step below has an exact command to type, so you don't need prior experience with this specific project
 
@@ -66,7 +67,7 @@ report back.
 
 ---
 
-## Testing proceeds in these stages (1 to 9, including 1b, 7b and 7c), in this exact order
+## Testing proceeds in these stages (1 to 9, including 1b, 6b, 7b and 7c), in this exact order
 
 Do not skip ahead — each stage assumes the previous one already works. If a
 later stage fails, the most likely cause is something in an earlier stage
@@ -266,7 +267,7 @@ pip install -r requirements.txt
 sudo apt install espeak-ng
 ```
 
-`espeak-ng` is what makes spoken output work (needed in Stage 7).
+`espeak-ng` is what makes spoken output work (needed in Stages 6b and 7).
 `requirements.txt` installs full `tensorflow`, which is large and may fail
 on the Pi. No model exists yet, so it is not needed for Stages 5 to 7b: if
 the install fails, report the error and run this instead:
@@ -307,6 +308,42 @@ With no model, this app prints **no per-frame output**. Seeing only the
 silence does not mean the link is dead (that's why `live_view.py` exists).
 Stop it with Ctrl+C. Report any error lines, in particular `Dropped a
 corrupt/misframed payload`.
+
+---
+
+### Stage 6b — Subtitle and speaker check (no model or gloves needed)
+
+This checks the two things a user actually sees and hears: the large
+subtitle text and the spoken output. Connect the speaker to the Pi first
+(see "What you'll need"). Then, **from `pi-side/` with the venv active**:
+```bash
+python tools/output_check.py
+```
+The terminal clears and shows "Listening..." in large letters, then the word
+**salamat** for 5 seconds. After that the speaker says *"Signyales speaker
+test. Salamat. Kumusta."* and a short summary is printed.
+
+The subtitle appears in the terminal window you ran the command in. If you
+are connected over SSH from a laptop, that is the SSH window on the laptop;
+on a monitor plugged into the Pi, it is that monitor. The sound always plays
+on the Pi's speaker.
+
+- No sound, and the summary says `FAILED`: read the error line above the
+  summary. `espeak-ng is not installed` means the `sudo apt install espeak-ng`
+  step in Stage 6 was skipped or failed.
+- No sound, but the summary says `reported no error`: the software ran, but the
+  audio is going to a different output. Check the speaker is selected as the
+  audio output (on the desktop, right-click the speaker icon in the top bar;
+  without a desktop, `sudo raspi-config`, then System Options, then Audio),
+  and the volume. Then run `python tools/output_check.py --no-subtitle` again.
+- Letters look broken or very wide: make the terminal window wider, or note it.
+
+**Report back:**
+- Was the subtitle readable from about 2 m away? Was it centered? Was this on
+  a monitor or over SSH?
+- Did you hear the whole phrase? Which speaker (USB, HDMI or other)? Were
+  "Salamat" and "Kumusta" understandable?
+- The summary printed at the end.
 
 ---
 
@@ -470,6 +507,7 @@ Stage 3 (right glove):       PASS / FAIL — [calibration numbers]
 Stage 4 (receiver sees both): PASS / FAIL — [stats line]
 Stage 5 (Pi UART wiring):    PASS / FAIL — [ls output / loopback result / port used]
 Stage 6 (hub app runs):      PASS / FAIL — [notes]
+Stage 6b (subtitle+speaker): PASS / FAIL — [readable Y/N, monitor or SSH | heard Y/N, speaker type]
 Stage 7 (full recognition):  PASS / FAIL / NOT APPLICABLE (no model yet)
 Stage 7b (real data):        PASS / FAIL — [notes]
 Stage 7c (readiness checks): alignment OK/NOT OK | repeatability notes | calibration kept after power cycle Y/N | 30-min run summary
