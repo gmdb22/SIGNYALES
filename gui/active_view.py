@@ -13,7 +13,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from core import hardware, mirror, recorder, tasks
-from core.env import PI_SIDE, default_serial_port, find_tool
+from core.env import IS_WINDOWS, PI_SIDE, default_serial_port, find_tool, is_raspberry_pi
 from core.live import LivePipeline, load_classifier, make_source
 from core.procs import ProcessRunner
 from widgets import MUTED, OK, BAD, FullscreenSubtitles, HandStatus, LogBox, SubtitlePanel
@@ -64,8 +64,15 @@ class PiActiveView(ttk.Frame):
         return var
 
     def _start_pipeline(self, model_dir, on_event, simulate=False, port=None):
+        if self.pipeline and self.pipeline.stopping:
+            self.pipeline.join(3)        # Disconnect was just pressed: let it finish first
         if self.pipeline and self.pipeline.running:
-            messagebox.showinfo("Already running", "Stop the current session first.")
+            messagebox.showinfo("Already connected", "Already connected. Press Stop / Disconnect first.")
+            return False
+        if not simulate and IS_WINDOWS and (port or default_serial_port()).startswith("/dev/"):
+            messagebox.showinfo("No gloves on this laptop",
+                                f"{port or default_serial_port()} is the Raspberry Pi's serial port; it doesn't "
+                                "exist on Windows. Tick 'Fake glove data' to try this screen without hardware.")
             return False
         self.pipeline = LivePipeline(lambda: make_source(port=port, simulate=simulate),
                                      lambda: load_classifier(model_dir),
@@ -92,7 +99,7 @@ class PiActiveView(ttk.Frame):
         self.r_share = tk.BooleanVar(value=False)
         ttk.Checkbutton(ctl, text="Share with a laptop (Mirror)", variable=self.r_share,
                         command=self._toggle_share).grid(row=0, column=3, sticky="w", padx=8)
-        self.r_sim = tk.BooleanVar(value=False)
+        self.r_sim = tk.BooleanVar(value=not is_raspberry_pi())
         ttk.Checkbutton(ctl, text="Fake glove data (demo without gloves)", variable=self.r_sim).grid(
             row=1, column=3, sticky="w", padx=8)
         self.share_label = ttk.Label(ctl, text="", foreground=MUTED)
@@ -208,7 +215,7 @@ class PiActiveView(ttk.Frame):
         ttk.Entry(ctl, textvariable=self.k_session, width=8).grid(row=2, column=1, sticky="w", padx=(150, 0))
         ttk.Label(ctl, text="Codes only, never names.", foreground=MUTED).grid(
             row=2, column=2, columnspan=2, sticky="w")
-        self.k_sim = tk.BooleanVar(value=False)
+        self.k_sim = tk.BooleanVar(value=not is_raspberry_pi())
         ttk.Checkbutton(ctl, text="Fake glove data (tool test only, not real data)",
                         variable=self.k_sim).grid(row=0, column=2, columnspan=2, sticky="w", padx=8)
 
@@ -252,6 +259,10 @@ class PiActiveView(ttk.Frame):
         self._space_held = False
         self.app.bind("<KeyPress-space>", self._space)
         self.app.bind("<KeyRelease-space>", self._space_up)
+        # If the big button has keyboard focus anyway, stop its built-in Space action
+        # (which would toggle a second time) and handle the key once here.
+        self.k_button.bind("<KeyPress-space>", self._space)
+        self.k_button.bind("<KeyRelease-space>", lambda e: (self._space_up(e), "break")[1])
         self.app.bind("<Escape>", self._escape)
 
     def _out_dir(self):
@@ -261,12 +272,13 @@ class PiActiveView(ttk.Frame):
 
     def start_recording_session(self):
         out = self._out_dir()
+        if not self._start_pipeline(None, self._on_record_event, simulate=self.k_sim.get(),
+                                    port=self.k_port.get().strip()):
+            return                       # keep the existing recorder attached
         self.recorder = recorder.GestureRecorder(out)
-        if self._start_pipeline(None, self._on_record_event, simulate=self.k_sim.get(),
-                                port=self.k_port.get().strip()):
-            self.pipeline.add_frame_listener(self.recorder.on_frame)
-            self.k_state.configure(text=f"Connecting... saving to {out}", foreground=MUTED)
-            self._update_counts()
+        self.pipeline.add_frame_listener(self.recorder.on_frame)
+        self.k_state.configure(text=f"Connecting... saving to {out}", foreground=MUTED)
+        self._update_counts()
 
     def _on_record_event(self, e):
         t = e["type"]
@@ -320,10 +332,10 @@ class PiActiveView(ttk.Frame):
                 self.k_log.append(f"Saved {path.name} for '{label}' ({frames} frames, "
                                   f"{frames / 50:.1f} s)", "pass")
             except ValueError as exc:
-                if frames < 2 and elapsed >= 0.5:
-                    self.k_log.append(f"Not saved: only {frames} frame(s) arrived in {elapsed:.1f} s. Glove data "
-                                      "isn't reaching the recorder: check the glove status lights above "
-                                      "(they should be green), or Disconnect and Connect again.", "fail")
+                if frames == 0:
+                    self.k_log.append(f"Not saved: no glove data reached the recorder (0 frames in "
+                                      f"{elapsed:.1f} s). Check the glove status lights above (green = data), "
+                                      "then Disconnect and Connect again.", "fail")
                 elif frames < 2:
                     self.k_log.append(f"Not saved: STOP came {elapsed:.2f} s after START. Hold the sign a "
                                       "little longer before stopping.", "fail")

@@ -79,6 +79,11 @@ class LivePipeline:
     def running(self):
         return self._thread is not None and self._thread.is_alive()
 
+    @property
+    def stopping(self):
+        """True after stop() was called, while the thread is still finishing."""
+        return self.running and self._stop.is_set()
+
     def start(self):
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, daemon=True)
