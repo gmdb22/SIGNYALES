@@ -14,6 +14,9 @@ signyales/
 ├── pi-side/                  Python application that runs on the Raspberry Pi 5
 │                             (tests/, tools/, deploy/, model/ live inside it)
 ├── training/                 Offline TinyML training pipeline (Jupyter + scripts)
+├── gui/                      The Signyales app (laptop and Pi): Testing mode
+│                             (every check is a button) and Active mode
+│                             (recognize, record, mirror, hardware helper)
 ├── tools/                    Laptop-side helpers: test_dashboard.py (one-click
 │                             no-hardware tests), results_visualizer.py
 ├── .github/workflows/        CI: runs the no-hardware tests on every push/PR
