@@ -73,6 +73,8 @@ jobs:
       - name: Run Pi-side unit tests (windowing, debouncer, tools helpers)
         working-directory: pi-side
         run: python tests/test_hub_units.py
+      - name: Run GUI core tests (no window; pipeline, recorder, mirror link)
+        run: python gui/tests/test_gui_core.py
       - name: Run the full pipeline briefly against synthetic data
         working-directory: pi-side
         run: |
