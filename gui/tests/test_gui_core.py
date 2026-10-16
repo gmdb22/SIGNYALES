@@ -137,10 +137,10 @@ with tempfile.TemporaryDirectory() as tmp:
     for i in range(37):
         rec.on_frame(frame(i), np.full(22, i, dtype=np.float32))
     path, n = rec.stop_rep("salamat")
-    data = np.load(path)
+    with np.load(path) as data:          # close the file: Windows can't delete open files
+        shape, label = data["features"].shape, str(data["label"])
     check("recorder: saves rep_0000.npz like collect_gesture.py",
-          path.name == "rep_0000.npz" and data["features"].shape == (50, 22)
-          and str(data["label"]) == "salamat" and n == 37)
+          path.name == "rep_0000.npz" and shape == (50, 22) and label == "salamat" and n == 37)
     rec.start_rep()
     rec.on_frame(frame(1), np.zeros(22, dtype=np.float32))
     try:
