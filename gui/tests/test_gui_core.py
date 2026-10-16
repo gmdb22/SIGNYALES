@@ -156,6 +156,12 @@ with tempfile.TemporaryDirectory() as tmp:
     check("recorder: numbering continues", path2.name == "rep_0001.npz"
           and recorder.count_reps(tmp, "salamat") == 2)
     check("recorder: frames are ignored when not recording", not rec.recording)
+    rec.start_rep()
+    for i in range(3):
+        rec.on_frame(frame(i), np.zeros(22, dtype=np.float32))
+    check("recorder: frame_count shows frames in the current repetition", rec.frame_count == 3)
+    rec.cancel_rep()
+    check("recorder: frame_count is 0 when not recording", rec.frame_count == 0)
 
 # ---------------------------------------------------------------- mirror
 received, disconnected = [], []

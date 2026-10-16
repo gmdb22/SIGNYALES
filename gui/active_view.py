@@ -236,7 +236,7 @@ class PiActiveView(ttk.Frame):
 
         self.k_button = tk.Button(tab, text="3. START repetition  (Space)", font=("Segoe UI", 16, "bold"),
                                   bg="#2f7a4f", fg="white", activebackground="#25613e", height=2,
-                                  command=self.toggle_rep, state="disabled")
+                                  command=self.toggle_rep, state="disabled", takefocus=0)
         self.k_button.pack(fill="x", pady=4)
         ttk.Label(tab, text="Press START, sign the word once, press STOP. Esc cancels a repetition. "
                             "Repeat until the target is reached, then pick the next word.",
@@ -247,7 +247,11 @@ class PiActiveView(ttk.Frame):
         self.k_hands.pack(side="left", anchor="n")
         self.k_log = LogBox(low, height=8)
         self.k_log.pack(side="left", fill="both", expand=True, padx=8)
-        self.app.bind("<space>", self._space)
+        self._last_toggle = 0.0
+        self._rep_started = 0.0
+        self._space_held = False
+        self.app.bind("<KeyPress-space>", self._space)
+        self.app.bind("<KeyRelease-space>", self._space_up)
         self.app.bind("<Escape>", self._escape)
 
     def _out_dir(self):
@@ -271,6 +275,8 @@ class PiActiveView(ttk.Frame):
             self.k_button.configure(state="normal")
         elif t == "status":
             self.k_hands.update_status(e)
+            if self.recorder and self.recorder.recording:
+                self.k_button.configure(text=f"STOP  (Space)   recording... {self.recorder.frame_count} frames")
         elif t == "error":
             self.k_log.append("ERROR: " + e["message"], "fail")
         elif t == "stopped":
@@ -292,6 +298,10 @@ class PiActiveView(ttk.Frame):
     def toggle_rep(self):
         if not self.recorder or not (self.pipeline and self.pipeline.running):
             return
+        now = time.monotonic()
+        if now - self._last_toggle < 0.35:
+            return       # a second trigger from the same press (e.g. button + Space shortcut together)
+        self._last_toggle = now
         label = self.k_word.get().strip()
         err = recorder.check_label(label)
         if err:
@@ -299,23 +309,42 @@ class PiActiveView(ttk.Frame):
             return
         if not self.recorder.recording:
             self.recorder.start_rep()
+            self._rep_started = now
             self.k_button.configure(text="STOP  (Space)   recording...", bg="#b3412c",
                                     activebackground="#8f3423")
         else:
+            elapsed = now - self._rep_started
+            frames = self.recorder.frame_count
             try:
                 path, frames = self.recorder.stop_rep(label)
                 self.k_log.append(f"Saved {path.name} for '{label}' ({frames} frames, "
                                   f"{frames / 50:.1f} s)", "pass")
             except ValueError as exc:
-                self.k_log.append(f"Not saved: {exc}", "fail")
+                if frames < 2 and elapsed >= 0.5:
+                    self.k_log.append(f"Not saved: only {frames} frame(s) arrived in {elapsed:.1f} s. Glove data "
+                                      "isn't reaching the recorder: check the glove status lights above "
+                                      "(they should be green), or Disconnect and Connect again.", "fail")
+                elif frames < 2:
+                    self.k_log.append(f"Not saved: STOP came {elapsed:.2f} s after START. Hold the sign a "
+                                      "little longer before stopping.", "fail")
+                else:
+                    self.k_log.append(f"Not saved: {exc}", "fail")
             self.k_button.configure(text="3. START repetition  (Space)", bg="#2f7a4f",
                                     activebackground="#25613e")
             self._update_counts()
 
     def _space(self, event):
-        if str(self.k_button["state"]) == "normal" and not isinstance(event.widget, (tk.Entry, ttk.Entry,
-                                                                                       ttk.Combobox)):
+        if isinstance(event.widget, (tk.Entry, ttk.Entry, ttk.Combobox, tk.Spinbox, ttk.Spinbox)):
+            return None                  # typing in a box: let the space through
+        if self._space_held:
+            return "break"               # key auto-repeat while held down
+        self._space_held = True
+        if str(self.k_button["state"]) == "normal":
             self.toggle_rep()
+        return "break"
+
+    def _space_up(self, event):
+        self._space_held = False
 
     def _escape(self, event):
         if self.recorder and self.recorder.recording:
@@ -324,7 +353,8 @@ class PiActiveView(ttk.Frame):
             self.k_button.configure(text="3. START repetition  (Space)", bg="#2f7a4f")
 
     def shutdown(self):
-        self.app.unbind("<space>")
+        self.app.unbind("<KeyPress-space>")
+        self.app.unbind("<KeyRelease-space>")
         self.app.unbind("<Escape>")
         self.stop_pipeline()
         if self.server:

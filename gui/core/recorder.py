@@ -67,6 +67,12 @@ class GestureRecorder:
     def recording(self):
         return self._buf is not None
 
+    @property
+    def frame_count(self):
+        """Frames collected so far in the current repetition (0 if not recording)."""
+        with self._lock:
+            return len(self._buf) if self._buf is not None else 0
+
     def on_frame(self, frame, features):
         with self._lock:
             if self._buf is not None:
