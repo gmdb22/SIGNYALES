@@ -1,0 +1,48 @@
+# Reference snapshot only. NOT a Pi requirements file and NOT verified on the Pi.
+#
+# Source: `python -m pip freeze` pasted by the project owner on 2026-10-14,
+# from the Windows dev-machine venv (pi-side\venv), Python 3.13.14, after a
+# full `pip install -r requirements.txt`. The Pi targets Python 3.11 on
+# Raspberry Pi OS Bookworm (aarch64); whether wheels for these exact versions
+# exist there is untested. Pin the Pi's own requirements from a `pip freeze`
+# run on the Pi after a Pi install has worked.
+#
+# Windows-only packages (pywin32, pypiwin32, comtypes) are left out on
+# purpose; pyttsx3 pulls them in on Windows automatically.
+absl-py==2.5.1
+astunparse==1.6.3
+certifi==2026.7.22
+charset-normalizer==3.5.2
+colorzero==2.0
+flatbuffers==25.12.19
+gast==0.7.0
+google-pasta==0.2.0
+gpiozero==2.0.1.post3
+grpcio==1.84.0
+h5py==3.14.0
+idna==3.20
+keras==3.15.1
+libclang==18.1.1
+markdown-it-py==4.2.0
+mdurl==0.1.2
+ml_dtypes==0.6.0
+namex==0.1.0
+numpy==2.5.4
+opt_einsum==3.4.0
+optree==0.20.0
+packaging==26.3
+protobuf==7.36.2
+pyfiglet==1.0.4
+Pygments==2.21.0
+pyserial==3.5
+pyttsx3==2.99
+requests==2.34.2
+rich==15.0.0
+setuptools==84.0.0
+six==1.17.0
+tensorflow==2.21.0
+termcolor==3.3.0
+typing_extensions==4.16.0
+urllib3==2.8.0
+wheel==0.48.0
+wrapt==2.5.0

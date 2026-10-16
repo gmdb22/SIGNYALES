@@ -36,8 +36,16 @@ log = logging.getLogger("signyales.model_runtime")
 
 
 class GestureClassifier:
-    def __init__(self, model_dir: str):
+    def __init__(self, model_dir: str, expected_window: int = None, expected_features: int = None):
+        """
+        expected_window / expected_features: the hub's window_size_samples
+        and feature_count from config.py. When given, a model whose input
+        shape doesn't match is refused at load time (with the reason in the
+        warning) instead of failing or misbehaving on the first predict().
+        """
         self.model_dir = Path(model_dir)
+        self.expected_window = expected_window
+        self.expected_features = expected_features
         self.available = False
         self.interpreter = None
         self.labels = []
@@ -59,14 +67,17 @@ class GestureClassifier:
             )
 
     def _load(self):
-        Interpreter = self._get_interpreter_class()
-
+        # Check the files first: importing an interpreter (especially full
+        # TensorFlow) can take many seconds, and is wasted when there is no
+        # model at all, e.g. a fresh checkout or the no-model hardware stages.
         model_path = self.model_dir / "model.tflite"
         labels_path = self.model_dir / "labels.json"
         scaler_path = self.model_dir / "scaler.json"
         for p in (model_path, labels_path, scaler_path):
             if not p.exists():
                 raise FileNotFoundError(str(p))
+
+        Interpreter = self._get_interpreter_class()
 
         self.interpreter = Interpreter(model_path=str(model_path))
         self.interpreter.allocate_tensors()
@@ -82,6 +93,37 @@ class GestureClassifier:
         self.std = np.array(scaler["std"], dtype=np.float32)
         # Guard against divide-by-zero on any constant feature column.
         self.std[self.std == 0] = 1.0
+
+        self._check_compatibility()
+
+    def _check_compatibility(self):
+        """
+        Confirms the three artifacts belong together and match the hub's
+        window settings. Raises ValueError with a readable reason; __init__
+        turns that into the usual "no usable model" warning.
+        """
+        in_shape = [int(d) for d in self.input_details[0]["shape"]]
+        out_shape = [int(d) for d in self.output_details[0]["shape"]]
+        if len(in_shape) != 3:
+            raise ValueError(f"model input shape {in_shape} is not (batch, window, features)")
+        _, window, features = in_shape
+
+        if self.expected_window is not None and window != self.expected_window:
+            raise ValueError(
+                f"model expects a {window}-sample window but config.py "
+                f"window_size_samples is {self.expected_window}")
+        if self.expected_features is not None and features != self.expected_features:
+            raise ValueError(
+                f"model expects {features} features per sample but config.py "
+                f"feature_count is {self.expected_features}")
+        if out_shape[-1] != len(self.labels):
+            raise ValueError(
+                f"model has {out_shape[-1]} output classes but labels.json lists "
+                f"{len(self.labels)} labels (files from different training runs?)")
+        if self.mean.shape != (features,) or self.std.shape != (features,):
+            raise ValueError(
+                f"scaler.json has {self.mean.size} mean / {self.std.size} std values, "
+                f"model expects {features} features (files from different training runs?)")
 
     @staticmethod
     def _get_interpreter_class():
@@ -126,7 +168,8 @@ class GestureClassifier:
             # Quantized model: apply the input tensor's quantization
             # params rather than feeding it raw floats.
             scale, zero_point = self.input_details[0]["quantization"]
-            x = (x / scale + zero_point).astype(input_dtype)
+            info = np.iinfo(input_dtype)
+            x = np.clip(np.round(x / scale + zero_point), info.min, info.max).astype(input_dtype)
         else:
             x = x.astype(input_dtype)
 
@@ -134,6 +177,14 @@ class GestureClassifier:
         self.interpreter.set_tensor(self.input_details[0]["index"], x)
         self.interpreter.invoke()
         output = self.interpreter.get_tensor(self.output_details[0]["index"])[0]
+
+        if output.dtype in (np.int8, np.uint8):
+            # Quantized output: convert back to real-valued probabilities
+            # using the output tensor's scale/zero-point. Without this the
+            # "confidence" would be a raw integer (e.g. -128..127) and any
+            # confidence threshold would be meaningless.
+            out_scale, out_zero = self.output_details[0]["quantization"]
+            output = (output.astype(np.float32) - out_zero) * out_scale
 
         idx = int(np.argmax(output))
         confidence = float(output[idx])

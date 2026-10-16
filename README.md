@@ -83,12 +83,17 @@ with no model. For the Python tests, use the `pi-side` venv:
 ```
 # PowerShell, folder: pi-side
 .\venv\Scripts\Activate.ps1
-pip install numpy pyserial
+python -m pip install numpy pyserial
 
 # bash, folder: pi-side
 source venv/bin/activate
-pip install numpy pyserial
+python3 -m pip install numpy pyserial
 ```
+
+Don't use `pip install -r requirements.txt` for simulated runs: it also pulls in
+TensorFlow, which is large and not needed for them. A snapshot of what one full
+laptop install resolved to is in `pi-side/requirements-laptop-lock.txt`
+(reference only, not verified on the Pi).
 
 **Native firmware logic tests** (needs `g++`; checks `packet.h` is 44 bytes and
 `frame.h` is 99 bytes, and the checksums):
@@ -198,6 +203,7 @@ Run from `pi-side/` in bash, venv active. Details in `pi-side/TESTING.md`.
 | Pi-side packet delivery and latency over a session | `python tools/performance_logger.py --port /dev/ttyAMA0 --duration 300 --out results/perf_run1` | Gloves and receiver. Delivery figures work with no model. Recognition latency needs one. |
 | Receiver-side delivery (ESP-NOW hop only) | `python tools/receiver_link_logger.py --port <receiver USB port> --duration 60 --out results/link_run1.csv` | A second USB cable from the receiver. |
 | Recognition accuracy matrix | `python tools/accuracy_logger.py --gestures kumusta salamat --trials 10 --model-dir model --out results/accuracy_session1` | A trained model in `pi-side/model/`. |
+| Inference time per window on the Pi | `python tools/benchmark_inference.py --model-dir model --runs 200` | A trained model in `pi-side/model/`. Measures `predict()` only, not the whole pipeline. |
 | Battery life (when does each glove stop?) | `python tools/live_view.py --port /dev/ttyAMA0 --duration 10800 --interval 300` | Prints `no fresh data since HH:MM:SS` per glove. |
 
 The receiver's `[stats]` ratio **freezes** when a glove goes silent, it does not

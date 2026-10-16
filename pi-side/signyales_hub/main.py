@@ -76,8 +76,10 @@ def main():
     if args.model_dir:
         cfg.model_dir = args.model_dir
 
-    classifier = GestureClassifier(cfg.model_dir)
-    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold)
+    classifier = GestureClassifier(cfg.model_dir, expected_window=cfg.window_size_samples,
+                                   expected_features=cfg.feature_count)
+    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold,
+                                 silent_labels=cfg.silent_labels)
     tts = TTSEngine() if not args.no_tts else None
     led = StatusLed(cfg.status_led_pin, cfg.status_led_enabled)
     window = WindowBuffer(cfg.window_size_samples, cfg.feature_count)
@@ -91,6 +93,10 @@ def main():
         source = SimulatedFrameSource(rate_hz=50)
     else:
         source = SerialFrameReader(cfg.serial_port, cfg.serial_baud)
+
+    silent_in_model = sorted(set(cfg.silent_labels) & set(classifier.labels))
+    if silent_in_model:
+        log.info("Silent (rest) labels in this model, never spoken: %s", silent_in_model)
 
     if not classifier.available:
         log.warning(

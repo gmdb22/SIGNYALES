@@ -22,6 +22,7 @@ training/data/*.npz
 pi-side/model/model.tflite
 pi-side/model/labels.json
 pi-side/model/scaler.json
+pi-side/model/train_report.json
 pi-side/tools/results/
 
 # --- OS/editor cruft ---

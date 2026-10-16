@@ -9,7 +9,7 @@ collect_gesture.py (on the Pi, live gloves)
     -> data/<label>/rep_NNNN.npz
         -> train.ipynb or src/train.py (on a laptop, this project)
             -> model.tflite + labels.json + scaler.json
-                -> copied into pi-side/model/
+                -> copied by hand onto the Pi, into its pi-side/model/
 ```
 
 ## What's in this folder
@@ -47,32 +47,96 @@ Either open `train.ipynb` in Jupyter and run cells top to bottom, or:
 ```
 pip install -r requirements.txt
 cd src
-python train.py --data-dir ../data
+python train.py --data-dir ../data --out-dir <folder outside the repo>
 ```
 
-`--out-dir` defaults to the pi-side app's `model/` directory automatically
-(resolved from this script's own location, not your current directory), so
-you don't need to pass it explicitly — it works the same whether you run
-this from `training/` or from `training/src/`.
+`--out-dir` is required. Write to a scratch folder outside the repo while a
+model is being evaluated, so it can't be committed by accident and a
+half-tested model never sits where the app looks for one. Only an accepted
+model goes to the Pi (Step 3).
+
+Besides the three model files, `train.py` writes `train_report.json` to the
+same folder: label counts, a SHA-256 fingerprint of the data, the git commit,
+the seed, library versions, the training history, the confusion matrix and
+per-class report, and these checks:
+
+- the data's window size and feature count against `pi-side/signyales_hub/config.py`
+  (the hub refuses a model that doesn't match),
+- mean and minimum confidence on validation and test windows against the
+  hub's `confidence_threshold` (0.70). A model can be accurate and still
+  never speak if its confidence sits below the threshold; the script prints
+  a WARNING when the validation mean is below it,
+- whether the exported files, loaded with the hub's own `GestureClassifier`,
+  agree with the Keras model on the test windows.
+
+`--seed` (default 42) fixes the data split and weight initialisation, so a
+rerun on the same machine and library versions gives the same model.
+
+Subfolders of `data/` whose names start with `_` or `.` are skipped. Rename
+recordings that must not be trained on, such as the hardware handoff's
+Stage 7b sanity set, e.g. `data/fist` to `data/_stage7b_fist`.
+
+`train.ipynb` runs the same pipeline with the same seed. Its export cell
+writes to `OUTPUT_DIR = "../../signyales_model_out"` (the folder next to the
+repo folder); change it if you want another scratch folder. The notebook does
+not write `train_report.json`.
 
 Add `--quantize` to export an int8 model instead of float32 — mainly relevant
 if this model ever needs to run on ESP32-class hardware directly (a future
 direction mentioned in the proposal); for inference on the Pi 5 itself,
 float32 is simpler to debug and fast enough.
 
-## Step 3 — Deploy
+## Step 3 — Deploy to the Pi
 
-There's nothing left to do — the default `--out-dir` already points at the
-pi-side app's `model/` directory, so the hub picks up the new model on its
-next run. Verify with:
+Training happens on a laptop and the app runs on the Pi, so the model does not
+reach the Pi by itself. Once the model is accepted (confusion matrix, per-class
+report, and mean confidence on held-out data above the hub's 0.70 threshold),
+copy the three files onto the Pi, into its `pi-side/model/` folder:
+
+- `model.tflite`
+- `labels.json`
+- `scaler.json`
+
+Any method works: `scp`, a USB stick, or a shared folder. For example, from
+PowerShell on the laptop (replace the user, address and repo path with your
+Pi's; this command has not been tested here):
 
 ```
-cd ../../pi-side
+scp <scratch folder>\model.tflite <scratch folder>\labels.json <scratch folder>\scaler.json <pi-user>@<pi-address>:<path-to-repo>/pi-side/model/
+```
+
+Optionally copy `train_report.json` too, so `pi-side/tools/freeze_manifest.py`
+can record which training run the model came from. The hub ignores it.
+
+The three files are git-ignored, so `git pull` will never bring them over and
+they will not be committed. Copy all three together: they are one model, and
+`labels.json` and `scaler.json` must come from the same training run as the
+`.tflite`.
+
+Then verify **on the Pi** (bash, folder `pi-side`, venv active):
+
+```
+source venv/bin/activate
 python -m signyales_hub.main --simulate --model-dir model -v
 ```
 
 You should see `Model loaded from model (N classes)` instead of the
-"no usable model" warning.
+"no usable model" warning. Then run `python tools/benchmark_inference.py` on
+the Pi to confirm inference fits the real-time budget.
+
+## Checking the pipeline without real data
+
+`tests/test_train_smoke.py` trains three tiny models on synthetic data in a
+temporary folder and checks that train.py requires `--out-dir`, skips `_`
+folders, exports float32 and int8 models the hub can load (with int8
+confidences in 0 to 1 and validation confidence above 0.70), writes
+`train_report.json`, and catches a window-size mismatch. It needs
+tensorflow and scikit-learn, takes about a minute, and runs in CI. It says
+nothing about accuracy on real signing.
+
+```
+python training/tests/test_train_smoke.py      (from the repo root)
+```
 
 ## The artifact contract, restated
 

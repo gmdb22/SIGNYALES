@@ -31,7 +31,8 @@ def main():
     args = p.parse_args()
 
     cfg = HubConfig()
-    classifier = GestureClassifier(args.model_dir)
+    classifier = GestureClassifier(args.model_dir, expected_window=cfg.window_size_samples,
+                                   expected_features=cfg.feature_count)
     if not classifier.available:
         print(f"No model found in '{args.model_dir}' — nothing to benchmark. "
               f"Place model.tflite/labels.json/scaler.json there first.")

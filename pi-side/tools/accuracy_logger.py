@@ -22,6 +22,7 @@ Usage:
 import argparse
 import csv
 import random
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -46,7 +47,8 @@ def run_trial(source_iter, cfg, classifier, timeout_s):
     Returns (predicted_label_or_NO_RESPONSE, confidence, latency_s).
     """
     window = WindowBuffer(cfg.window_size_samples, cfg.feature_count)
-    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold)
+    debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold,
+                                 silent_labels=cfg.silent_labels)
 
     start = time.monotonic()
     frame_count = 0
@@ -99,7 +101,8 @@ def main():
     if args.model_dir:
         cfg.model_dir = args.model_dir
 
-    classifier = GestureClassifier(cfg.model_dir)
+    classifier = GestureClassifier(cfg.model_dir, expected_window=cfg.window_size_samples,
+                                   expected_features=cfg.feature_count)
     if not classifier.available:
         print(f"FATAL: no usable model at '{cfg.model_dir}'. Train and export one first "
               f"(see training/) before running accuracy tests.")
@@ -199,9 +202,11 @@ def main():
         print(f"  {label}: {pct:.1f}% ({label_correct}/{len(label_rows)})")
 
     if latencies:
-        mean_latency = sum(latencies) / len(latencies)
-        std_latency = (sum((v - mean_latency) ** 2 for v in latencies) / len(latencies)) ** 0.5
-        print(f"Recognition latency (successful trials only): mean={mean_latency:.2f}s, std={std_latency:.2f}s")
+        mean_latency = statistics.mean(latencies)
+        # Sample standard deviation (n - 1), as the proposal specifies.
+        std_text = f"{statistics.stdev(latencies):.2f}s" if len(latencies) > 1 else "n/a (needs 2+ trials)"
+        print(f"Recognition latency (trials with a response): mean={mean_latency:.2f}s, "
+              f"sample std={std_text}")
 
 
 if __name__ == "__main__":

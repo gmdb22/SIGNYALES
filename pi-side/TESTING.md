@@ -43,6 +43,11 @@ timeout — worth distinguishing from a wrong answer when writing up results,
 since it points at a different problem (recognition too slow/uncertain,
 rather than confusing two specific gestures).
 
+If the model has a rest class whose label is listed in `silent_labels` in
+`signyales_hub/config.py` (default `rest`), a confirmed rest is never
+reported as a gesture, so a trial where only rest was recognized is also
+recorded as `no_response`. Don't include the rest label in `--gestures`.
+
 ## Performance logging
 
 ```
@@ -59,6 +64,13 @@ Runs for a fixed duration (or until Ctrl+C) and reports:
   stable gesture being confirmed. This is *pipeline* latency, not the full
   human-gesture-to-speech latency — see the caveat in the script's own
   docstring before reporting it as the latter in your results chapter.
+- **Stage timing:** inference time per `predict()` call (mean, p95, max),
+  debounce wait per recognized gesture, and the spacing between frames
+  reaching the Pi (about 20 ms expected; much less means a backlog burst).
+  These are pieces of a latency budget measured on the Pi, not the
+  glove-to-speech latency. Add `--log-inferences` to also save every
+  inference (label, confidence, timing) to `<out>_inferences.csv`, for
+  choosing the confidence threshold and debounce count.
 
 ## Lower-level link diagnostics (optional)
 
@@ -77,6 +89,22 @@ receiver firmware README) and logs its per-hand delivery ratio, computed
 on the dongle itself from actual sequence-number gaps — a more precise,
 lower-level figure than the Pi-side ratio above, at the cost of needing
 that extra cable.
+
+## Freezing before field testing
+
+Right before the first participant session, on the machine that will run
+the sessions:
+
+```
+python tools/freeze_manifest.py --model-dir model --out results/freeze_manifest.json --strict
+```
+
+It writes the git commit, the SHA-256 of `model.tflite`, `labels.json`,
+`scaler.json` (and `train_report.json` if it was copied too), every
+`config.py` value and the installed package versions, and warns about
+uncommitted changes or a model the hub can't load. `--strict` makes any
+warning exit with code 1. Run it again (with a new `--out` name) after the
+last session: if anything differs, something changed mid-study.
 
 ## A note on battery performance
 
