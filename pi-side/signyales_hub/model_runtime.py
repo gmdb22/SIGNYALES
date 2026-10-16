@@ -67,14 +67,17 @@ class GestureClassifier:
             )
 
     def _load(self):
-        Interpreter = self._get_interpreter_class()
-
+        # Check the files first: importing an interpreter (especially full
+        # TensorFlow) can take many seconds, and is wasted when there is no
+        # model at all, e.g. a fresh checkout or the no-model hardware stages.
         model_path = self.model_dir / "model.tflite"
         labels_path = self.model_dir / "labels.json"
         scaler_path = self.model_dir / "scaler.json"
         for p in (model_path, labels_path, scaler_path):
             if not p.exists():
                 raise FileNotFoundError(str(p))
+
+        Interpreter = self._get_interpreter_class()
 
         self.interpreter = Interpreter(model_path=str(model_path))
         self.interpreter.allocate_tensors()

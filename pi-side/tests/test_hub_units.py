@@ -146,6 +146,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check("model: missing files -> available is False", clf.available is False)
     check("model: predict() returns (None, 0.0) without a model",
           clf.predict(np.zeros((50, 22), dtype=np.float32)) == (None, 0.0))
+    check("model: no interpreter library is imported when there is no model",
+          not any(m in sys.modules for m in ("tensorflow", "tflite_runtime", "ai_edge_litert")))
 
 # ------------------------------------------------- performance_logger helper
 perf = load_tool("performance_logger")
