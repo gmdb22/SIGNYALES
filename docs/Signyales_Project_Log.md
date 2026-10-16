@@ -26,3 +26,11 @@ vibe coding the fuck outta the capstone -recce
 update on how the testing has been -andrei
 
 FAH use /compact when vibing, i am going nowhere dawg brah
+
+oct. 16, 2026 - FAH
+1. PCBs finished → hardware handoff tests pass.
+2. Recorder fixes F1–F5, consent forms ready, word list confirmed by Ma’am Joanne.
+3. At home: record yourself → train → check that recognition and speech work live (development only).
+4. Blessed Ville visits: record students (no speech yet).
+5. At home: train on the student recordings.
+6. Blessed Ville visits: live testing with speech and subtitles, plus the survey.
