@@ -27,6 +27,20 @@ update on how the testing has been -andrei
 
 FAH use /compact when vibing, i am going nowhere dawg brah
 
+## 2026-10-16
+
+- Created branch `code-tasks` from `fixes-f6-f7-f8-f15` (8 commits): sample (n-1) standard
+  deviation in the loggers, model compatibility check on load, silent `rest` label in the
+  debouncer, stage timing in performance_logger, train.py report/seed/required --out-dir,
+  tools/freeze_manifest.py, unit tests and a training smoke test, faster start with no model.
+- Verified: GitHub Actions run #23 on `e49ce6d`, all 8 jobs passed. On the Windows laptop:
+  test_hub_units.py 33/33, test_train_smoke.py 15/15, main --simulate ran cleanly.
+  Synthetic data only; nothing tested on the gloves, receiver or Pi.
+- Tagged the hardware-handoff commit `f4f7ad8` as `handoff-1`. Updated the tester addendum hash.
+- Hardware handoff not started yet: PCBs still being manufactured.
+- Open: decisions D1–D5 (window length, one/two hands, rest, test split, serial_link), latency
+  definition vs the 300 ms target, word list to confirm with Blessed Ville.
+
 oct. 16, 2026 - FAH
 1. PCBs finished → hardware handoff tests pass.
 2. Recorder fixes F1–F5, consent forms ready, word list confirmed by Ma’am Joanne.
