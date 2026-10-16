@@ -100,7 +100,8 @@ def main():
     if args.model_dir:
         cfg.model_dir = args.model_dir
 
-    classifier = GestureClassifier(cfg.model_dir)
+    classifier = GestureClassifier(cfg.model_dir, expected_window=cfg.window_size_samples,
+                                   expected_features=cfg.feature_count)
     if not classifier.available:
         print(f"FATAL: no usable model at '{cfg.model_dir}'. Train and export one first "
               f"(see training/) before running accuracy tests.")

@@ -76,7 +76,8 @@ def main():
     if args.model_dir:
         cfg.model_dir = args.model_dir
 
-    classifier = GestureClassifier(cfg.model_dir)
+    classifier = GestureClassifier(cfg.model_dir, expected_window=cfg.window_size_samples,
+                                   expected_features=cfg.feature_count)
     debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold)
     tts = TTSEngine() if not args.no_tts else None
     led = StatusLed(cfg.status_led_pin, cfg.status_led_enabled)
