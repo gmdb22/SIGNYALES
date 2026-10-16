@@ -47,22 +47,39 @@ Either open `train.ipynb` in Jupyter and run cells top to bottom, or:
 ```
 pip install -r requirements.txt
 cd src
-python train.py --data-dir ../data
-```
-
-`--out-dir` defaults to `pi-side/model/` inside **this laptop's copy** of the
-repo (resolved from the script's own location, so it is the same wherever you
-run it from). That is not the Pi. While a model is still being evaluated, write
-it to a scratch folder outside the repo instead (so it can't be committed by
-accident, and a half-tested model never sits where the app looks for one):
-
-```
 python train.py --data-dir ../data --out-dir <folder outside the repo>
 ```
 
-`train.ipynb` has no such option: its last cell sets
-`OUTPUT_DIR = "../pi-side/model"`. Edit that line to a scratch folder before
-running it, if you want the same protection.
+`--out-dir` is required. Write to a scratch folder outside the repo while a
+model is being evaluated, so it can't be committed by accident and a
+half-tested model never sits where the app looks for one. Only an accepted
+model goes to the Pi (Step 3).
+
+Besides the three model files, `train.py` writes `train_report.json` to the
+same folder: label counts, a SHA-256 fingerprint of the data, the git commit,
+the seed, library versions, the training history, the confusion matrix and
+per-class report, and these checks:
+
+- the data's window size and feature count against `pi-side/signyales_hub/config.py`
+  (the hub refuses a model that doesn't match),
+- mean and minimum confidence on validation and test windows against the
+  hub's `confidence_threshold` (0.70). A model can be accurate and still
+  never speak if its confidence sits below the threshold; the script prints
+  a WARNING when the validation mean is below it,
+- whether the exported files, loaded with the hub's own `GestureClassifier`,
+  agree with the Keras model on the test windows.
+
+`--seed` (default 42) fixes the data split and weight initialisation, so a
+rerun on the same machine and library versions gives the same model.
+
+Subfolders of `data/` whose names start with `_` or `.` are skipped. Rename
+recordings that must not be trained on, such as the hardware handoff's
+Stage 7b sanity set, e.g. `data/fist` to `data/_stage7b_fist`.
+
+`train.ipynb` runs the same pipeline with the same seed. Its export cell
+writes to `OUTPUT_DIR = "../../signyales_model_out"` (the folder next to the
+repo folder); change it if you want another scratch folder. The notebook does
+not write `train_report.json`.
 
 Add `--quantize` to export an int8 model instead of float32 — mainly relevant
 if this model ever needs to run on ESP32-class hardware directly (a future
