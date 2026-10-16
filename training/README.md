@@ -124,6 +124,20 @@ You should see `Model loaded from model (N classes)` instead of the
 "no usable model" warning. Then run `python tools/benchmark_inference.py` on
 the Pi to confirm inference fits the real-time budget.
 
+## Checking the pipeline without real data
+
+`tests/test_train_smoke.py` trains three tiny models on synthetic data in a
+temporary folder and checks that train.py requires `--out-dir`, skips `_`
+folders, exports float32 and int8 models the hub can load (with int8
+confidences in 0 to 1 and validation confidence above 0.70), writes
+`train_report.json`, and catches a window-size mismatch. It needs
+tensorflow and scikit-learn, takes about a minute, and runs in CI. It says
+nothing about accuracy on real signing.
+
+```
+python training/tests/test_train_smoke.py      (from the repo root)
+```
+
 ## The artifact contract, restated
 
 `export_artifacts()` in `src/export.py` writes exactly what

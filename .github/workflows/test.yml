@@ -70,6 +70,9 @@ jobs:
           python-version: "3.11"
       - name: Install minimal dependencies
         run: pip install numpy
+      - name: Run Pi-side unit tests (windowing, debouncer, tools helpers)
+        working-directory: pi-side
+        run: python tests/test_hub_units.py
       - name: Run the full pipeline briefly against synthetic data
         working-directory: pi-side
         run: |
@@ -82,6 +85,29 @@ jobs:
             exit 1
           fi
           echo "Pipeline ran cleanly for 8s with no crash (exit code: ${code:-0 (ended on its own)})"
+
+  # ------------------------------------------------------------------
+  # Training smoke test — trains three tiny models on SYNTHETIC data in a
+  # temp folder and checks the export loads in the hub runtime (float32
+  # and int8), clears the confidence threshold, writes train_report.json,
+  # and that a window-size mismatch is caught. Not an accuracy result.
+  # ------------------------------------------------------------------
+  training-smoke-test:
+    name: Training pipeline smoke test (synthetic data)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install training dependencies (CPU-only TensorFlow)
+        run: pip install numpy scikit-learn tensorflow-cpu
+      - name: Show installed versions
+        run: python -c "import tensorflow as tf, sklearn, numpy; print('tensorflow', tf.__version__, 'sklearn', sklearn.__version__, 'numpy', numpy.__version__)"
+      - name: Run test_train_smoke.py
+        env:
+          TF_CPP_MIN_LOG_LEVEL: "2"
+        run: python training/tests/test_train_smoke.py
 
   # ------------------------------------------------------------------
   # Firmware compile checks — the one job that needs real network access

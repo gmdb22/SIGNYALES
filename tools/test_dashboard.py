@@ -101,6 +101,17 @@ def test_frame_roundtrip():
     return run_subprocess([PI_SIDE_PYTHON, "tests/test_frame_roundtrip.py"], PI_SIDE_DIR)
 
 
+def test_hub_units():
+    return run_subprocess([PI_SIDE_PYTHON, "tests/test_hub_units.py"], PI_SIDE_DIR)
+
+
+def test_train_smoke():
+    # Needs tensorflow and scikit-learn in the pi-side venv. Trains three tiny
+    # models on synthetic data in a temp folder (about a minute).
+    return run_subprocess([PI_SIDE_PYTHON, "training/tests/test_train_smoke.py"],
+                          PI_SIDE_DIR.parent, timeout=600)
+
+
 def test_native_logic():
     ext = ".exe" if IS_WINDOWS else ""
     results = []
@@ -203,9 +214,11 @@ class DashboardApp:
 
         self.runners = {
             "frame": TestRunner(self, "frame", "Frame Format Round-Trip Test", test_frame_roundtrip),
+            "units": TestRunner(self, "units", "Pi-Side Unit Tests", test_hub_units),
             "native": TestRunner(self, "native", "Native Firmware Logic Tests", test_native_logic),
             "pipeline": TestRunner(self, "pipeline", "Pi-Side Pipeline Smoke Test", test_pipeline_smoke),
             "firmware": TestRunner(self, "firmware", "Firmware Compile Check (slow, needs internet)", test_firmware_compile),
+            "training": TestRunner(self, "training", "Training Smoke Test (slow, needs TensorFlow)", test_train_smoke),
         }
 
         button_frame = tk.Frame(root)
@@ -222,7 +235,7 @@ class DashboardApp:
             status_lbl.pack(side="left", padx=10)
             self.status_labels[key] = status_lbl
 
-        run_all_btn = tk.Button(root, text="Run All (except firmware compile)", bg="#1f2933", fg="white",
+        run_all_btn = tk.Button(root, text="Run All (except firmware compile and training)", bg="#1f2933", fg="white",
                                   font=("Segoe UI", 10, "bold"), command=self.run_all)
         run_all_btn.pack(pady=10)
 
@@ -260,7 +273,7 @@ class DashboardApp:
 
     def run_all(self):
         def _run():
-            for key in ("frame", "native", "pipeline"):
+            for key in ("frame", "units", "native", "pipeline"):
                 self.runners[key].run()
         threading.Thread(target=_run, daemon=True).start()
 
