@@ -21,6 +21,7 @@ receiver UART -> parse frames -> extract features -> sliding window
 | `signyales_hub/status_led.py` | Optional GPIO status LED via gpiozero. |
 | `signyales_hub/main.py` | Wires everything together. |
 | `tools/benchmark_inference.py` | Measures real inference latency once a model exists. |
+| `tools/output_check.py` | Shows a test subtitle and plays a test phrase, to check the screen and speaker (no model or gloves needed). |
 | `tools/freeze_manifest.py` | Records the commit, model file hashes, config values and package versions before field testing. |
 | `tests/test_frame_roundtrip.py` | Verifies the Python struct format matches the firmware's, with no hardware needed. |
 | `tests/test_hub_units.py` | Unit checks for feature order, windowing, debouncing (incl. the rest label), recorder resampling and tool helpers. Needs only numpy. |

@@ -59,9 +59,37 @@ class TTSEngine:
         else:
             subprocess.run(["espeak-ng", text], check=False)
 
+    @property
+    def backend(self) -> str:
+        """Which speech backend is in use: "pyttsx3" or "espeak-ng"."""
+        return self._backend
+
     def speak(self, text: str):
         """Non-blocking: queues text and returns immediately."""
         self._queue.put(text)
+
+    def speak_blocking(self, text: str) -> bool:
+        """
+        Speaks text in the calling thread and waits until it finishes.
+        Returns True if the backend reported no error, False otherwise.
+        For checks such as tools/output_check.py, not for the live loop
+        (which must never block on speech). True means no error was
+        raised, not that sound reached a speaker; a person has to listen.
+        """
+        try:
+            if self._backend == "pyttsx3" and self._engine is not None:
+                self._engine.say(text)
+                self._engine.runAndWait()
+                return True
+            result = subprocess.run(["espeak-ng", text], check=False)
+            return result.returncode == 0
+        except FileNotFoundError:
+            log.error("espeak-ng is not installed (on the Pi: sudo apt install espeak-ng), "
+                      "and pyttsx3 could not start either, so nothing can be spoken.")
+            return False
+        except Exception:
+            log.exception("TTS playback failed for: %s", text)
+            return False
 
     def shutdown(self):
         self._queue.put(None)

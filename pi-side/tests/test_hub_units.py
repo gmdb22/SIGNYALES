@@ -172,6 +172,37 @@ with tempfile.TemporaryDirectory() as tmp:
           m["model_files"]["model.tflite"]["sha256"]
           == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 
+# ------------------------------------------------- output (subtitle / speech)
+import io  # noqa: E402
+import contextlib  # noqa: E402
+from signyales_hub.subtitle_display import SubtitleDisplay  # noqa: E402
+from signyales_hub import tts_engine  # noqa: E402
+
+sd = SubtitleDisplay()
+sd._clear_screen = lambda: None          # don't clear the test runner's terminal
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    sd.show("salamat")
+check("subtitle: show() renders text without errors", len(buf.getvalue().strip()) > 0)
+
+engine = tts_engine.TTSEngine()
+check("speech: backend is reported", engine.backend in ("pyttsx3", "espeak-ng"), engine.backend)
+engine._backend = "espeak-ng"            # force the subprocess path, without making a sound
+real_run = tts_engine.subprocess.run
+
+
+def _missing(*a, **k):
+    raise FileNotFoundError("espeak-ng")
+
+
+tts_engine.subprocess.run = _missing
+try:
+    check("speech: speak_blocking returns False when no backend can speak",
+          engine.speak_blocking("test") is False)
+finally:
+    tts_engine.subprocess.run = real_run
+    engine.shutdown()
+
 print()
 if failures:
     print(f"{len(failures)} check(s) FAILED: {failures}")
