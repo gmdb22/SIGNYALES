@@ -19,6 +19,7 @@ embedded directly in the window — no separate plot windows popping up.
 
 import csv
 import json
+import statistics
 import tkinter as tk
 from collections import defaultdict
 from pathlib import Path
@@ -80,11 +81,10 @@ def aggregate_accuracy(rows):
         lbl: (per_label_correct[lbl] / per_label_total[lbl] * 100) if per_label_total[lbl] else 0.0
         for lbl in labels
     }
-    mean_latency = sum(latencies) / len(latencies) if latencies else None
-    std_latency = (
-        (sum((v - mean_latency) ** 2 for v in latencies) / len(latencies)) ** 0.5
-        if latencies else None
-    )
+    mean_latency = statistics.mean(latencies) if latencies else None
+    # Sample standard deviation (n - 1), as the proposal specifies.
+    # Undefined for fewer than two values.
+    std_latency = statistics.stdev(latencies) if len(latencies) > 1 else None
 
     return {
         "labels": labels,
@@ -223,7 +223,10 @@ class VisualizerApp:
         lines.append("")
         if result["mean_latency"] is not None:
             lines.append(f"Latency mean: {result['mean_latency']:.2f}s")
-            lines.append(f"Latency std:  {result['std_latency']:.2f}s")
+            if result["std_latency"] is not None:
+                lines.append(f"Latency sample std (n-1):  {result['std_latency']:.2f}s")
+            else:
+                lines.append("Latency sample std (n-1):  n/a (needs 2+ trials)")
         else:
             lines.append("No successful trials to compute latency from.")
 

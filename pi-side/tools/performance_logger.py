@@ -29,6 +29,7 @@ Usage:
 import argparse
 import csv
 import json
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -158,13 +159,16 @@ def main():
         "gestures_recognized": len(recognition_events),
         "latency_mean_s": None,
         "latency_std_s": None,
+        "latency_std_method": "sample (n-1)",
     }
     if recognition_events:
         latencies = [e[3] for e in recognition_events]
-        mean_latency = sum(latencies) / len(latencies)
-        std_latency = (sum((v - mean_latency) ** 2 for v in latencies) / len(latencies)) ** 0.5
+        mean_latency = statistics.mean(latencies)
         summary["latency_mean_s"] = round(mean_latency, 3)
-        summary["latency_std_s"] = round(std_latency, 3)
+        # Sample standard deviation (divides by n - 1), as the proposal's
+        # statistical treatment specifies. Undefined for a single event.
+        if len(latencies) > 1:
+            summary["latency_std_s"] = round(statistics.stdev(latencies), 3)
 
     summary_json = out_path.parent / (out_path.name + "_summary.json")
     with open(summary_json, "w") as f:
