@@ -171,12 +171,17 @@ with tempfile.TemporaryDirectory() as tmp:
     sess = root / "W01_S01"
     for word in ("salamat", "oo"):
         (sess / word).mkdir(parents=True)
-        np.savez(sess / word / "rep_0000.npz", features=np.zeros((50, 22), np.float32), label=word)
+        for r in range(recorder.MIN_REPS_PER_WORD):
+            np.savez(sess / word / f"rep_{r:04d}.npz", features=np.zeros((50, 22), np.float32), label=word)
     ok, msg, words = recorder.describe_data_folder(root)
     check("data folder: picking the parent of sessions is explained", not ok and "W01_S01" in msg, msg)
     ok, msg, words = recorder.describe_data_folder(sess)
-    check("data folder: a session folder with 2 words is accepted", ok and words == {"oo": 1, "salamat": 1},
+    check("data folder: a session folder with 2 words x 10 is accepted", ok and words == {"oo": 10, "salamat": 10},
           words)
+    (sess / "oo" / "rep_0009.npz").unlink()
+    ok, msg, words = recorder.describe_data_folder(sess)
+    check("data folder: a word with fewer than 10 recordings is refused", not ok and "oo (9)" in msg, msg)
+    np.savez(sess / "oo" / "rep_0009.npz", features=np.zeros((50, 22), np.float32), label="oo")
     ok, msg, words = recorder.describe_data_folder(sess / "salamat")
     check("data folder: a single word folder is refused", not ok)
     (sess / "_stage7b").mkdir()

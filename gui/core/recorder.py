@@ -109,6 +109,7 @@ class GestureRecorder:
         return path, len(buf)
 
 
+MIN_REPS_PER_WORD = 10       # same as training/src/train.py
 DATA_HOME = Path.home() / "signyales_data"
 MODELS_HOME = Path.home() / "signyales_models"
 
@@ -129,6 +130,11 @@ def describe_data_folder(folder):
         if len(words) < 2:
             return False, (f"Only one word here ({', '.join(words)}). Training needs at least 2 different "
                            "words. Record another word into this same folder first."), words
+        short = {w: n for w, n in words.items() if n < MIN_REPS_PER_WORD}
+        if short:
+            listing = ", ".join(f"{w} ({n})" for w, n in short.items())
+            return False, (f"Too few recordings: {listing}. Each word needs at least {MIN_REPS_PER_WORD} "
+                           "(20 or more recommended) for training. Record more into this folder."), words
         return True, "", words
     nested = [d for d in subdirs if any(dd.is_dir() and any(dd.glob("rep_*.npz")) for dd in d.iterdir())]
     if nested:

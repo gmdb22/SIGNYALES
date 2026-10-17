@@ -69,6 +69,10 @@ per-class report, and these checks:
 - whether the exported files, loaded with the hub's own `GestureClassifier`,
   agree with the Keras model on the test windows.
 
+Each word needs **at least 10 recordings** (20 or more recommended): the
+70/15/15 split puts every word in the training, validation and test parts,
+and `train.py` stops with a clear message if any word has fewer.
+
 `--seed` (default 42) fixes the data split and weight initialisation, so a
 rerun on the same machine and library versions gives the same model.
 

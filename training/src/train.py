@@ -56,6 +56,11 @@ sys.path.append(str(PI_SIDE_DIR))
 from signyales_hub.config import HubConfig  # noqa: E402
 
 
+# The 70/15/15 stratified split needs every word in every part. 10 recordings
+# per word always satisfies that (checked for 2 to 30 words); fewer can fail.
+MIN_REPS_PER_WORD = 10
+
+
 def compute_scaler(X_train: np.ndarray):
     """Mean/std per feature, computed ONLY on the training split —
     never on validation/test data, or the evaluation numbers would be
@@ -155,6 +160,14 @@ def main():
     X, y, labels = load_dataset(args.data_dir)
     label_dirs, skipped_dirs = split_label_dirs(args.data_dir)
     print(f"Loaded {X.shape[0]} samples across {len(labels)} labels: {labels}")
+    too_few = {lbl: int((y == i).sum()) for i, lbl in enumerate(labels)
+               if (y == i).sum() < MIN_REPS_PER_WORD}
+    if too_few:
+        listing = ", ".join(f"{w} ({n})" for w, n in too_few.items())
+        print(f"ERROR: too few recordings to train: {listing}. Each word needs at least "
+              f"{MIN_REPS_PER_WORD} (20 or more recommended) so it can appear in the training, "
+              f"validation and test parts. Record more, then train again.")
+        sys.exit(2)
     if X.shape[0] < 20 * len(labels):
         print(
             "WARNING: fewer than ~20 samples per class on average. Results below "

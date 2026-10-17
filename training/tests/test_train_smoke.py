@@ -61,7 +61,7 @@ def make_dataset(root: Path, window: int):
             np.savez(d / f"rep_{r:04d}.npz", features=x * 100 + 2000, label=label)
 
 
-def train(data: Path, out: Path = None, extra=()):
+def train(data: Path, out: Path = None, extra=(), expect_fail=False):
     cmd = [sys.executable, str(TRAIN), "--data-dir", str(data), "--epochs", "20", *extra]
     if out is not None:
         cmd += ["--out-dir", str(out)]
@@ -70,7 +70,7 @@ def train(data: Path, out: Path = None, extra=()):
     # default cp1252 can't decode (seen when run from the GUI).
     env = dict(os.environ, TF_CPP_MIN_LOG_LEVEL="2", PYTHONIOENCODING="utf-8")
     p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
-    if p.returncode != 0 and out is not None:
+    if p.returncode != 0 and out is not None and not expect_fail:
         print((p.stdout + p.stderr)[-3000:])
     return p
 
@@ -137,6 +137,17 @@ def main():
                   all(0.0 <= c <= 1.0 for c in confs), f"min={min(confs)}, max={max(confs)}")
             agree = sum(a[0] == b[0] for a, b in zip(preds8, preds32))
             check("int8: labels agree with float32 on >= 10 of 12 windows", agree >= 10, agree)
+
+        # ---- too few recordings per word
+        few = tmp / "data_few"
+        for label in LABELS:
+            (few / label).mkdir(parents=True)
+            for r in range(5):
+                shutil.copy(data / label / f"rep_{r:04d}.npz", few / label / f"rep_{r:04d}.npz")
+        p = train(few, tmp / "model_few", extra=("--epochs", "1"), expect_fail=True)
+        check("too few: 5 recordings per word stop with a clear message (exit 2, no traceback)",
+              p.returncode == 2 and "too few recordings" in p.stdout and "Traceback" not in p.stderr,
+              (p.returncode, p.stdout[-200:]))
 
         # ---- window mismatch
         data40 = tmp / "data40"
