@@ -107,7 +107,10 @@ python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 --model-dir model
 Add `--subtitle` for large, fullscreen text output during a demo — this is
 the proposal's "visible text output" requirement, deliberately kept to
 plain large text with no GUI elements, buttons, or windows, matching the
-proposal's "console or LED-based" scope language:
+proposal's "console or LED-based" scope language. (Since October 2026 there
+is also a windowed app, `gui/signyales_gui.py`, with subtitles, speech,
+recording and a laptop mirror; see `gui/README.md`. That is an approved scope
+change; this console mode is unchanged.)
 
 ```
 python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model --subtitle

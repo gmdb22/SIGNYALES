@@ -29,27 +29,45 @@ signyales/
                               physical hardware (not the project author)
 ```
 
-## Test Dashboard
+## Signyales app (GUI)
 
 ```
-python tools/test_dashboard.py
+# PowerShell, folder: repo root
+pi-side\venv\Scripts\python.exe gui\signyales_gui.py
+
+# bash on the Pi (desktop, not plain SSH; once: sudo apt install python3-tk)
+pi-side/venv/bin/python gui/signyales_gui.py
 ```
 
-A local GUI for running every no-hardware test with one click each —
-no commands, folders, or venv activation to remember. Shows live
-pass/fail status and full output for the frame format test, the native
-firmware logic tests, the Pi-side pipeline smoke test, and (slower, needs
-PlatformIO + internet) a full firmware compile check. If a required tool
-(like `g++` or `pio`) isn't installed, that test shows as "Skipped" with
-an explanation rather than crashing the dashboard.
+One app for the laptop and the Pi, with two modes:
+
+- **Testing:** every check is a button with PASS/FAIL and full output: the
+  software tests, native firmware tests, training smoke test, firmware
+  compile, Pi hardware checks (UART loopback, live data, freeze manifest),
+  the subtitle and speaker check, a simulated pipeline, and inspect / train /
+  benchmark.
+- **Active:** on the Pi, *Recognize* (large subtitles and speech, optional
+  sharing to a laptop) and *Record* (teach the model with a Start/Stop
+  button); on the laptop, *Mirror the Pi* (the laptop shows and speaks what
+  the Pi recognizes) and a *Hardware helper* (compile/upload firmware,
+  serial monitor, RECEIVER_MAC check).
+
+Details, setup and the mirror link: `gui/README.md`. The GUI subtitles and
+the laptop mirror are a scope change from the proposal's console-only output
+(approved by the adviser, as reported by the team in October 2026); the
+console app `signyales_hub.main` still works as before.
+
+The older one-click runner, `python tools/test_dashboard.py`, still works for
+the four basic no-hardware tests.
 
 ## Continuous Integration
 
 Every push and pull request automatically runs everything in this repo
-that's testable without physical hardware — the frame format contract
-test, the native firmware logic tests, a Pi-side pipeline smoke test, and
-a full compile check of all 4 firmware targets (left glove, right glove,
-receiver, MAC utility). See `.github/workflows/test.yml`. Check the
+that's testable without physical hardware: the frame format contract
+test, the native firmware logic tests, the Pi-side pipeline smoke test with
+the Pi-side unit tests and the GUI core tests, a training smoke test on
+synthetic data, and a full compile check of all 4 firmware targets (left
+glove, right glove, receiver, MAC utility). See `.github/workflows/test.yml`. Check the
 Actions tab on GitHub after pushing to see results.
 
 Open `signyales.code-workspace` in VSCode to load all sub-projects at once,
@@ -70,14 +88,18 @@ the Windows dev machine; bash is the Raspberry Pi (or any Linux/macOS shell).
 
 ### Level 1 — No hardware needed
 
-One-click version (PowerShell or bash, from the repo root; needs Python with
-tkinter): `python tools/test_dashboard.py`. Or run each test by hand:
+One-click version: the GUI's **Testing** mode (see "Signyales app" above),
+or the older `python tools/test_dashboard.py`. Or run each test by hand:
 
 | Test | Folder | PowerShell | bash |
 |---|---|---|---|
 | Frame format round-trip, plus serial reader resync (Python standard library only) | `pi-side` | `python tests\test_frame_roundtrip.py` | `python3 tests/test_frame_roundtrip.py` |
 | Whole Pi pipeline on synthetic data (runs until you press Ctrl+C; needs `numpy`) | `pi-side` | `python -m signyales_hub.main --simulate --no-tts -v` | `python3 -m signyales_hub.main --simulate --no-tts -v` |
 | Live viewer self-test (needs `pyserial`, `numpy`) | `pi-side` | `python tools\live_view.py --simulate --duration 3` | `python3 tools/live_view.py --simulate --duration 3` |
+| Pi-side unit tests (needs `numpy`) | `pi-side` | `python tests\test_hub_units.py` | `python3 tests/test_hub_units.py` |
+| GUI core tests, no window (needs `numpy`) | repo root | `python gui\tests\test_gui_core.py` | `python3 gui/tests/test_gui_core.py` |
+| Training smoke test, about 1-3 min (needs TensorFlow, scikit-learn) | repo root | `python training\tests\test_train_smoke.py` | `python3 training/tests/test_train_smoke.py` |
+| Subtitle and speaker check (listen and look) | `pi-side` | `python tools\output_check.py` | `python3 tools/output_check.py` |
 
 Expected: the first prints a line starting `PASS:`. The second logs
 `Running in --simulate mode` and a "No model loaded" warning, which is normal
@@ -105,7 +127,10 @@ laptop install resolved to is in `pi-side/requirements-laptop-lock.txt`
 # bash, folder: firmware
 bash tests/native/run_all.sh
 
-# PowerShell, folder: firmware\tests\native
+# PowerShell, folder: repo root (same tests, build files go to a temp folder)
+python gui\core\run_native_tests.py
+
+# PowerShell, folder: firmware\tests\native (by hand)
 g++ -Wall -Wextra -I..\..\glove\src -o test_packet_logic.exe test_packet_logic.cpp
 g++ -Wall -Wextra -I..\..\receiver\src -o test_frame_logic.exe test_frame_logic.cpp
 .\test_packet_logic.exe
@@ -184,7 +209,15 @@ sequence. Stage numbers match that guide and the log form.
    prints `No frames for ...s`, nothing is reaching the Pi: check wiring, port and baud.
    Then `python -m signyales_hub.main --port /dev/ttyAMA0 -v`: with no model it prints
    only startup lines and **nothing per frame**, so use `live_view.py` to see data.
-6. **Record real data (Stage 7b).** Gloves worn.
+6. **Subtitle and speaker (Stage 6b).** Speaker connected to the Pi (the Pi 5 has
+   no 3.5 mm jack: use USB or HDMI audio).
+   ```
+   # bash, folder: pi-side, venv active
+   python tools/output_check.py
+   ```
+   Large "salamat" on screen, then a spoken test phrase. Listen and look; there is
+   no automatic pass.
+7. **Record real data (Stage 7b).** Gloves worn.
    ```
    # bash, folder: pi-side, venv active
    python tools/collect_gesture.py --label fist --reps 5 --port /dev/ttyAMA0 --out ../training/data
@@ -215,13 +248,21 @@ since boot, so power-cycle between range trials.
 
 ### What's been verified
 
-The Python tests, the simulated pipeline and viewer, and the native
-firmware tests in Level 1 were run on Linux against this repo, and passed.
-The test dashboard, the firmware compile check, the Windows/PowerShell
-variants above, and every Level 2 and 3 command on real gloves or a Pi 5
-have **not** been run by the author of this section. Treat them as untested
-until the log form says otherwise, and check the GitHub Actions tab for the
-compile results.
+As of 17 October 2026, on branch `code-tasks`, synthetic data only:
+
+- **Linux and CI:** all Level 1 tests pass. GitHub Actions run #23 on
+  `e49ce6d` passed all 8 jobs, including the 4 firmware compiles; check the
+  Actions tab for later pushes.
+- **Windows dev laptop (Python 3.13):** in the GUI's Testing mode, all
+  software checks, the native firmware tests and all 4 firmware compiles
+  passed; the subtitle and speaker check played each word in step with the
+  screen; recording with fake glove data, training on it, recognition and the
+  Pi-to-laptop mirror (two windows on one laptop) worked.
+
+**Not run anywhere yet:** every Level 2 and 3 command on real gloves,
+receiver or a Pi 5; firmware uploads; the GUI on a Pi; the mirror over a
+real cable or Wi-Fi; recognition accuracy on real signing. Treat these as
+untested until the hardware test log says otherwise.
 
 ## Build order
 

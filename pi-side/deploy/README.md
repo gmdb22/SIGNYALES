@@ -8,6 +8,11 @@ booting — power it on, and it's running, no terminal required.
 This uses `systemd`, the standard Linux service manager already built into
 Raspberry Pi OS — nothing extra to install beyond what's already on the Pi.
 
+**Note:** this starts the console app (`signyales_hub.main`), not the GUI
+(`gui/signyales_gui.py`). Starting the GUI on boot needs the Pi's desktop
+session and isn't set up yet. If you run the GUI, stop this service first
+(`sudo systemctl stop signyales`): both need the serial port.
+
 ## Install
 
 ```bash

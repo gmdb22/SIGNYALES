@@ -167,6 +167,10 @@ path only resolved correctly depending on which directory it was run from.
 It was fixed by computing the default from the script's own file location
 (`Path(__file__).resolve()...`) instead of a directory-relative string, and
 re-verified with the same end-to-end test afterward.
+(Later change, October 2026: `train.py` no longer has a default output folder;
+`--out-dir` is required, so a model is never written into `pi-side/model` by
+accident. It also writes `train_report.json` and needs at least 10 recordings
+per word. See `training/README.md`.)
 
 ---
 

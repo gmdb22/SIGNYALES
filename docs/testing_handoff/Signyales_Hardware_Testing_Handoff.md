@@ -345,6 +345,19 @@ on the Pi's speaker.
   "Salamat" and "Kumusta" understandable?
 - The summary printed at the end.
 
+**Optional: the Signyales app (GUI).** The repo also has a windowed app that
+runs these checks as buttons and shows large subtitles. It is **not needed**
+for this guide, and it has not been run on a Raspberry Pi yet, so anything
+you notice is useful. Only if you have time, on the Pi's desktop (not over
+plain SSH), from the repo root:
+```bash
+sudo apt install python3-tk
+pi-side/venv/bin/python gui/signyales_gui.py
+```
+Try Testing mode's **Run all software checks** and **Subtitle and speaker
+check**. Report whether it opened, and any error shown. Close it before
+continuing: it and the other tools can't share the serial port.
+
 ---
 
 ### Stage 7 — Full end-to-end test

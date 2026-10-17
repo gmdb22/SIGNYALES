@@ -14,6 +14,20 @@ All three reuse the actual `signyales_hub` modules (serial parsing,
 windowing, model inference, debouncing) — they measure the real deployed
 pipeline's behavior, not a simplified stand-in for it.
 
+## Before every session: screen, speaker and link
+
+Takes a minute and catches the most common demo failures (wrong audio output,
+muted speaker, laptop not connected):
+
+- Console: `python tools/output_check.py` (from `pi-side/`, venv active) shows a
+  large test word and speaks a test phrase.
+- GUI: Testing mode → **Subtitle and speaker check**. If a laptop mirrors the Pi,
+  press **Send test word** on the Pi's Recognize tab: the laptop must show and
+  speak "salamat".
+
+These are listen-and-look checks with no automatic pass; write down what you
+saw and heard.
+
 ## Recognition Accuracy Matrix
 
 ```

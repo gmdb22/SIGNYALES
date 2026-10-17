@@ -35,6 +35,10 @@ python tools/collect_gesture.py --label salamat --reps 20 --out ../training/data
 # ...repeat per gesture
 ```
 
+Or use the GUI on the Pi: **Active → Record** (`gui/README.md`). It saves the
+same files under `~/signyales_data/<signer>_<session>/<word>/`; pass that
+session folder as `--data-dir`.
+
 Record from a few different sessions/wearers if possible — a model trained on
 one uninterrupted 10-minute session tends to learn that session's specific
 noise as much as the gesture itself, and won't generalize as well to a
@@ -42,7 +46,9 @@ field-testing day.
 
 ## Step 2 — Train
 
-Either open `train.ipynb` in Jupyter and run cells top to bottom, or:
+Either open `train.ipynb` in Jupyter and run cells top to bottom, use the
+GUI (**Testing → Train a model…**, which runs `train.py` and checks the data
+folder first), or:
 
 ```
 pip install -r requirements.txt
