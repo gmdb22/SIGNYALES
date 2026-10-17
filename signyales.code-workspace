@@ -5,6 +5,7 @@
     { "name": "MAC Address Utility", "path": "firmware/tools/get_mac_address" },
     { "name": "Pi-Side App", "path": "pi-side" },
     { "name": "Training Pipeline", "path": "training" },
+    { "name": "GUI", "path": "gui" },
     { "name": "Docs", "path": "docs" }
   ],
   "settings": {

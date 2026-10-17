@@ -48,3 +48,21 @@ oct. 16, 2026 - FAH
 4. Blessed Ville visits: record students (no speech yet).
 5. At home: train on the student recordings.
 6. Blessed Ville visits: live testing with speech and subtitles, plus the survey.
+
+## 2026-10-17
+
+- Since the 16 Oct entry: tagged `handoff-2` (16 Oct), then added the Signyales app (`gui/`,
+  Testing and Active modes, laptop and Pi), `pi-side/tools/output_check.py` and handoff
+  Stage 6b (subtitle and speaker check, no model needed).
+- Fixed what Windows testing found (17 Oct): GUI speech now uses the Windows SAPI voice in a
+  separate helper, recording Start/Stop works with one press or Space, training needs at
+  least 10 recordings per word. Also added a "Send test word" button on the Pi's Recognize tab.
+- Verified on the Windows laptop, fake glove data only: all GUI Testing-mode checks passed,
+  the 4 firmware compiles passed, and the subtitle and speaker check was seen and heard.
+  Record, train, recognize and the mirror between two windows worked.
+- Updated the docs to match (commit `0f31777`). `code-tasks` and `hardware-handoff` are both
+  at `0f31777`, tagged `handoff-3` (the tag was moved from `a4c30c5`). Updated the tester
+  addendum and command cheat sheet to `handoff-3`.
+- Not run anywhere yet: the Pi, real gloves and receiver, firmware upload, the GUI on a Pi,
+  the mirror over a real network, and console app speech on Windows.
+- Open: decisions D1–D5 and latency, word list with Ma'am Joanne, consent forms, F1–F5 and F16.
