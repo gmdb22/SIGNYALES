@@ -112,6 +112,7 @@ class PiActiveView(ttk.Frame):
         ttk.Button(btns, text="Stop", command=self.stop_pipeline).pack(side="left", padx=6)
         ttk.Button(btns, text="Fullscreen subtitles", command=lambda: FullscreenSubtitles(
             self.app, self.r_subtitle)).pack(side="left")
+        ttk.Button(btns, text="Send test word", command=self.send_test_word).pack(side="left", padx=6)
         self.r_state = ttk.Label(btns, text="Stopped.", foreground=MUTED)
         self.r_state.pack(side="left", padx=10)
 
@@ -172,6 +173,27 @@ class PiActiveView(ttk.Frame):
             self.r_state.configure(text="Stopped.", foreground=MUTED)
             self.r_hands.reset()
             self.r_subtitle.idle()
+
+    def send_test_word(self):
+        """
+        Treats a test word exactly like a recognized sign: subtitle and speech
+        here, and the same event to any connected laptop. For checking the
+        display, speaker and mirror link before a demo; needs no model or gloves.
+        """
+        event = {"type": "gesture", "label": "salamat", "confidence": 1.0, "test": True}
+        if self.server:
+            self.server.publish(event)
+            n = self.server.client_count
+            self.r_log.append(f"Test word 'salamat' sent to {n} connected laptop(s)."
+                              + ("" if n else " None connected: on the laptop, Active > Mirror the Pi > Connect."),
+                              "muted")
+        else:
+            self.r_log.append("Test word shown here only. Tick 'Share with a laptop' to send it to a laptop too.",
+                              "muted")
+        self.r_subtitle.show(event["label"])
+        self.r_recent.add(event["label"] + " (test)")
+        if self.r_speak.get():
+            self.app.speaker.say(event["label"])
 
     def _toggle_share(self):
         if self.r_share.get():
@@ -462,7 +484,10 @@ class LaptopActiveView(ttk.Frame):
         t = e.get("type")
         if t == "gesture":
             self.m_subtitle.show(e["label"])
-            self.m_recent.add(e["label"], e.get("confidence"))
+            if e.get("test"):
+                self.m_recent.add(e["label"] + " (test)")
+            else:
+                self.m_recent.add(e["label"], e.get("confidence"))
             if self.m_speak.get():
                 self.app.speaker.say(e["label"])
         elif t == "status":

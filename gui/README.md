@@ -35,6 +35,9 @@ output appear in the log, so a result can always be repeated by hand.
    **Start recognition**. The Pi shows its address(es).
 3. On the laptop: **Active → Mirror the Pi**, type that address, **Connect**.
 
+To check the link without a model or gloves, press **Send test word** on the Pi: the
+laptop shows and speaks "salamat" exactly as for a recognized sign.
+
 Only recognized words and a twice-a-second glove status are sent (TCP port
 50555), never sensor recordings. There is no password, so only share on a
 cable or a network you control. Untick **Speak words on this Pi** if the
