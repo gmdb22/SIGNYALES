@@ -1,7 +1,7 @@
 # Signyales — Hardware Testing: Step by Step with Commands
 
 > **Older guide (13 Oct 2026), kept for reference.** For hardware testing, use
-> `docs/testing_handoff/Signyales_Hardware_Testing_Handoff.md` at tag `handoff-3`.
+> `docs/testing_handoff/Signyales_Hardware_Testing_Handoff.md` at tag `handoff-4`.
 > This page has no Stage 6b (subtitle and speaker check) and no GUI, and may be
 > out of date in other places.
 

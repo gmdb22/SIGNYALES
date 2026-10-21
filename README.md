@@ -80,7 +80,8 @@ Three levels, cheapest first. Don't move up until the level below passes.
 Anything run with `--simulate` uses synthetic data and is **never** a
 hardware result. For hardware testing by someone other than the project
 author, use `docs/testing_handoff/Signyales_Hardware_Testing_Handoff.md`
-(step-by-step, with pass criteria) and fill in
+(step-by-step, with pass criteria: Parts A to C set up the Pi 5 and VS Code
+and run the software checks, then Stages 1 to 9 test the hardware) and fill in
 `docs/testing_handoff/signyales_test_log.html`.
 
 Commands show the terminal and the folder to run them from. PowerShell is
@@ -195,13 +196,10 @@ sequence. Stage numbers match that guide and the log form.
    python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
    ```
    Expect `b'hello'`. Remove the jumper, then wire the receiver (TX/RX crossed, shared ground).
-5. **Pi software (Stage 6).**
+5. **Pi software (Stage 6).** The venv, packages and `espeak-ng` are installed
+   in the handoff guide's Part A.
    ```
-   # bash, folder: pi-side
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   sudo apt install espeak-ng
+   # bash, folder: pi-side, venv active
    python tests/test_frame_roundtrip.py
    python tools/live_view.py --port /dev/ttyAMA0 --duration 30
    ```
@@ -290,14 +288,15 @@ can do changes on lockin-start-here but any changes during testing should be don
 
 ## Hardware handoff: which version to test
 
-- The version for hardware testing is the tag **`handoff-3`** (adds Stage 6b,
-  the subtitle and speaker check). The exact commit hash is in the tester
-  addendum. `handoff-1` and `handoff-2` are older versions; don't use them.
+- The version for hardware testing is the tag **`handoff-4`** (adds Parts A
+  to C to the guide: Pi 5 setup, VS Code setup and the software checks). The
+  exact commit hash is in the tester addendum. `handoff-1` to `handoff-3` are
+  older versions; don't use them.
 - Testers: clone the repo and check out the tag, on both the laptop and the Pi:
   ```
   git clone https://github.com/gmdb22/SIGNYALES.git
   cd SIGNYALES
-  git checkout handoff-3
+  git checkout handoff-4
   git --no-pager log -1 --oneline
   ```
   The last line must start with the hash given in the addendum. A "detached
@@ -307,6 +306,7 @@ can do changes on lockin-start-here but any changes during testing should be don
   and **never committed**: every receiver has its own MAC.
 - If a code fix is pushed to `hardware-handoff` during testing, tag that commit
   with the next number (`handoff-4`, `handoff-5`, ...) and tell the tester which
-  tag to use. Commits that only change documentation don't need a new tag.
+  tag to use. Commits that only change documentation don't need a new tag,
+  unless they change the testing guide itself (as `handoff-4` did).
 - `hardware-handoff` is not locked on GitHub. The tags are the record of exactly
   what was tested.

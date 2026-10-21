@@ -233,7 +233,7 @@
     </div>
     <div class="meta-field">
       <label class="field-label" for="repoCommit">Repo commit</label>
-      <input type="text" id="repoCommit" placeholder="Output of: git rev-parse --short HEAD">
+      <input type="text" id="repoCommit" placeholder="Output of: git --no-pager log -1 --oneline">
     </div>
   </div>
 
@@ -252,6 +252,12 @@
 
 <script>
 const STAGES = [
+  { id: "A",  num: "A",  title: "Raspberry Pi 5 set up",
+    hint: "Paste the three version lines from Part A4 (model, OS, Python) and the git log line from A5. Did pip install -r requirements.txt work? If not, paste the error and say whether the fallback install worked." },
+  { id: "B",  num: "B",  title: "Laptop and VS Code set up",
+    hint: "Paste the git log line from Part B3 (it must match the Pi's), the Python version from B4 and the PlatformIO version from B5." },
+  { id: "C",  num: "C",  title: "Software checks, no gloves (laptop and Pi)",
+    hint: "Paste the last line of each Part C command, on each machine. Note whether the native tests ran or were skipped (no g++). Paste any Traceback or ERROR line in full." },
   { id: "1",  num: "1",  title: "Code compiles",
     hint: "Paste the pio run output, or the exact error if it failed." },
   { id: "1b", num: "1b", title: "Receiver MAC address set",
@@ -310,7 +316,7 @@ STAGES.forEach((stage, i) => {
   el.className = "stage";
   el.innerHTML = `
     <div class="stage-head">
-      <span class="stage-num">STAGE ${stage.num}</span>
+      <span class="stage-num">${/^\d/.test(stage.num) ? "STAGE" : "PART"} ${stage.num}</span>
       <span class="stage-title">${stage.title}</span>
     </div>
     <div class="toggles" data-key="${key}">
@@ -377,7 +383,7 @@ document.getElementById("generateBtn").addEventListener("click", () => {
   lines.push("");
   STAGES.forEach((stage, i) => {
     const s = state["stage_" + stage.id] || {};
-    lines.push(`Stage ${stage.num} — ${stage.title}: ${statusLabel(s.status)}`);
+    lines.push(`${/^\d/.test(stage.num) ? "Stage" : "Part"} ${stage.num} — ${stage.title}: ${statusLabel(s.status)}`);
     if (s.notes && s.notes.trim()) {
       lines.push("  " + s.notes.trim().split("\n").join("\n  "));
     }

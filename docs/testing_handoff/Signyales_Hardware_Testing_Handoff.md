@@ -11,21 +11,359 @@ This guide is self-contained — you shouldn't need to ask the project owner
 anything to get through it, except where it explicitly says to stop and
 report back.
 
+The guide has two halves, done in order:
+
+1. **Parts A to C: setup and software checks (no gloves needed).**
+   Part A sets up the Raspberry Pi 5, Part B sets up VS Code on your laptop,
+   and Part C checks that the software runs on both.
+2. **Stages 1 to 9: hardware tests**, from compiling the firmware to the range test.
+
+Every command says where to type it:
+- **LAPTOP**: Windows PowerShell, in VS Code's terminal.
+- **PI**: the Raspberry Pi's terminal (bash).
+
+It also says which folder to be in.
+
 ---
 
 ## What you'll need before starting
 
-- [ ] The project repository (ask for the GitHub link or a zip file)
-- [ ] [VSCode](https://code.visualstudio.com/) installed, plus its **PlatformIO IDE** extension (search for it in VSCode's Extensions panel)
-- [ ] The assembled hardware: 2 gloves, 1 receiver dongle, 1 Raspberry Pi 5 — see `docs/Signyales_Hardware_Assembly_Guide.docx` in the repo for wiring diagrams if anything isn't assembled yet
-- [ ] A USB cable for each ESP32 board (gloves + receiver) to connect to your computer
+**For the Raspberry Pi (Part A)**
+- [ ] A Raspberry Pi 5, its official 27 W USB-C power supply, and the active cooler. An underpowered or overheating Pi slows itself down, which can look like a software fault.
+- [ ] A microSD card (32 GB or larger), and a card reader for your laptop if it has no SD slot
+- [ ] A monitor, a micro-HDMI to HDMI cable (the Pi 5 only has micro-HDMI ports), and a USB keyboard and mouse
+- [ ] Internet for the Pi during setup (Wi-Fi, or an Ethernet cable). It's only needed for the downloads in Part A.
 - [ ] A speaker for the Pi, for Stage 6b. A USB speaker is easiest: the Raspberry Pi 5 has **no 3.5 mm audio jack**, so a plug-in speaker needs a USB sound adapter, or use a monitor with speakers over HDMI
-- [ ] Write down, before starting: which Raspberry Pi model you have (this project uses a Raspberry Pi 5; tell us if yours is different) and your PlatformIO version (`pio --version`)
+
+**For the laptop (Part B)**
+- [ ] A Windows laptop with internet, where you're allowed to install programs
+- [ ] A USB **data** cable for each ESP32 board (2 gloves and the receiver). Some cables only charge and won't work.
+
+**Hardware and access**
+- [ ] The assembled hardware: 2 gloves, 1 receiver dongle — see `docs/Signyales_Hardware_Assembly_Guide.docx` in the repo for wiring diagrams if anything isn't assembled yet
+- [ ] Access to the repository `https://github.com/gmdb22/SIGNYALES`, and the tester addendum with the commit hash to expect. If `git clone` asks you to log in, ask the project owner for access.
 - [ ] Basic comfort with a terminal — every step below has an exact command to type, so you don't need prior experience with this specific project
 
 ---
 
-## Before you start, and what to watch for
+## Part A — Set up the Raspberry Pi 5
+
+These are the standard Raspberry Pi setup steps. They haven't been done on
+this project's Pi yet, so if a screen or menu looks different, pick the
+closest choice and write down what you saw.
+
+**A1. Put Raspberry Pi OS on the microSD card (LAPTOP).**
+1. Install **Raspberry Pi Imager** from https://www.raspberrypi.com/software/
+   and open it. Put the microSD card in the laptop.
+2. Choose the device **Raspberry Pi 5**, the operating system
+   **Raspberry Pi OS (64-bit)** (the recommended one, with the desktop), and
+   your microSD card as the storage. Double-check the storage choice:
+   everything on that card is erased.
+3. When Imager offers to customise the settings, set:
+   - hostname: `signyales`
+   - a username and password (write them down)
+   - your Wi-Fi name, password and country (skip this if you'll use Ethernet)
+   - your time zone and keyboard layout
+   - optional: turn on **SSH** with password login, so you can type Pi
+     commands from your laptop (see A8)
+4. Write the card, wait until it has finished verifying, then take it out.
+
+**A2. First start.**
+1. Put the card in the Pi. Connect the monitor (either micro-HDMI port),
+   keyboard, mouse, the speaker, and Ethernet if you use it. Plug in the
+   27 W power supply last.
+2. The first start takes a few minutes and may restart once by itself. Log
+   in with the username you set.
+3. Open a terminal (the terminal icon in the top bar, or Ctrl+Alt+T).
+
+To turn the Pi off at any point, run `sudo shutdown now` and wait for the
+green light to stop flashing before unplugging. Pulling the power while it
+runs can damage the card.
+
+**A3. Install git, venv, Tk and espeak-ng on the Pi (PI, any folder).**
+
+These are installed **on the Pi itself**: type the commands into the Pi's
+terminal, not the laptop's. The Pi needs internet for this step.
+
+1. Check the Pi is online:
+   ```bash
+   ping -c 3 raspberrypi.com
+   ```
+   You should see three lines containing `time=`. If it says
+   `Temporary failure in name resolution` or `Network is unreachable`,
+   connect to Wi-Fi (the network icon in the top bar) or plug in Ethernet,
+   then try again.
+2. Update the Pi. This takes a few minutes. `sudo` asks for the Pi's
+   password; nothing appears while you type it, which is normal.
+   ```bash
+   sudo apt update
+   sudo apt full-upgrade -y
+   ```
+3. Install the four packages with one command:
+   ```bash
+   sudo apt install -y git python3-venv python3-tk espeak-ng
+   ```
+
+   | Package | What it's for |
+   |---|---|
+   | `git` | Downloads the project code (A5) |
+   | `python3-venv` | Makes the Python environment (A6) |
+   | `python3-tk` | Windows for the optional Signyales app (GUI) |
+   | `espeak-ng` | The voice for spoken output (Stages 6b and 7) |
+
+   Some may already be on the Pi. `is already the newest version` is fine.
+4. Restart, then open a terminal again:
+   ```bash
+   sudo reboot
+   ```
+5. Check all four are installed:
+   ```bash
+   git --version
+   python3 -m venv --help | head -n 1
+   python3 -c "import tkinter; print('Tk', tkinter.TkVersion)"
+   espeak-ng --version
+   ```
+   Expect, in order: `git version ...`, `usage: venv ...`, `Tk 8.6` (or
+   another number), and `eSpeak NG text-to-speech: ...`. A
+   `command not found` or `ModuleNotFoundError` means that package didn't
+   install: run step 3 again and report the error if it repeats.
+
+If any `apt` command fails, copy the full error into your report.
+
+**A4. Write down the Pi's versions (PI, any folder).**
+```bash
+cat /proc/device-tree/model; echo
+grep PRETTY_NAME /etc/os-release
+python3 --version
+```
+The first line should say `Raspberry Pi 5`. If it says something else, tell
+the project owner. The Pi's Python packages were written for Raspberry Pi
+OS "Bookworm" with Python 3.11 and have never been installed on a real Pi,
+so these versions matter if anything fails later.
+
+**A5. Get the code (PI, home folder).**
+```bash
+cd ~
+git clone https://github.com/gmdb22/SIGNYALES.git
+cd SIGNYALES
+git checkout handoff-4
+git --no-pager log -1 --oneline
+```
+A "detached HEAD" message is normal. The last line must start with the
+commit hash in the tester addendum. If it doesn't, stop and report. Put that
+line in every report. From now on, `~/SIGNYALES` is the repo on the Pi.
+
+Already have a copy from an earlier handoff? Run `cd ~/SIGNYALES`, then
+`git fetch --tags --force`, then `git checkout handoff-4`, then the `log`
+line above.
+
+**A6. Make the Python environment and install the packages (PI, folder `~/SIGNYALES/pi-side`).**
+```bash
+cd ~/SIGNYALES/pi-side
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+The prompt now starts with `(venv)`. Whenever this guide says **"venv
+active"**, it means: open a terminal, then run
+```bash
+cd ~/SIGNYALES/pi-side
+source venv/bin/activate
+```
+
+`requirements.txt` installs full `tensorflow`, which is large and may fail
+on the Pi. No model exists yet, so it isn't needed before Stage 7. If the
+install fails, copy the error into your report, then run this instead:
+```bash
+pip install pyserial numpy pyttsx3 pyfiglet gpiozero lgpio
+```
+(The fallback is untested; the project's CI notes say the hub runs without
+TensorFlow when no model is present.)
+
+**A7. Choose the speaker and test it (PI, any folder).** Plug the speaker
+into the Pi, then use either method:
+
+- **On the desktop:** right-click the speaker (volume) icon in the top bar
+  and pick your speaker as the audio output, then left-click it and set the
+  volume to about three-quarters.
+- **With commands** (in the Pi's own terminal, not over SSH):
+  ```bash
+  wpctl status
+  ```
+  Under **Audio**, the **Sinks** list shows each output with a number; the
+  current one has a `*`. Make your speaker the default and set the volume,
+  replacing `47` with your speaker's number:
+  ```bash
+  wpctl set-default 47
+  wpctl set-volume @DEFAULT_AUDIO_SINK@ 75%
+  ```
+  If `wpctl` is not found, use the desktop method.
+
+Then test it:
+```bash
+espeak-ng "Signyales speaker test"
+```
+If you hear nothing, report the `wpctl status` output. Stage 6b checks the
+speaker and subtitles fully.
+
+**A8. Optional: type Pi commands from your laptop (SSH).** Only if you
+turned on SSH in A1. In PowerShell on the laptop:
+```powershell
+ssh <your Pi username>@signyales.local
+```
+If `signyales.local` isn't found, run `hostname -I` on the Pi and use the
+first address it prints instead. Commands typed in that window run on the
+Pi. Two things still need the Pi's own monitor: the subtitles in Stage 6b
+(over SSH they appear in the SSH window instead) and the optional GUI.
+
+**Report (Part A):** the three lines from A4, the `log` line from A5, and
+whether `pip install -r requirements.txt` worked. If it didn't, include the
+error and whether the fallback worked.
+
+---
+
+## Part B — Set up VS Code on your laptop
+
+These steps match the project owner's Windows laptop, where the software
+was tested with Python 3.13. Other setups haven't been tried.
+
+**B1. Install Git, Python 3.13 and VS Code (LAPTOP).** Use either method.
+
+*With commands* (PowerShell; `winget` is built into Windows 10 and 11):
+```powershell
+winget install -e --id Git.Git
+winget install -e --id Python.Python.3.13
+winget install -e --id Microsoft.VisualStudioCode
+```
+
+*From the websites* (the default options are fine unless noted):
+1. **Git for Windows**: https://git-scm.com/download/win
+2. **Python 3.13**, 64-bit, from https://www.python.org/downloads/windows/.
+   On the first installer screen, tick **"Add python.exe to PATH"**.
+3. **VS Code**: https://code.visualstudio.com/
+
+Use Python 3.13 even if a newer version is offered: TensorFlow may not
+support the newest Python yet.
+
+Then restart the laptop (or at least close every PowerShell and VS Code
+window), open PowerShell again and check:
+```powershell
+git --version
+py -3.13 --version
+code --version
+```
+Each should print a version number. (`py` is the Python launcher that comes
+with Python.)
+
+**B2. Add the VS Code extensions (LAPTOP, PowerShell).**
+```powershell
+code --install-extension platformio.platformio-ide
+code --install-extension ms-python.python
+```
+Or, in VS Code, open the Extensions panel (Ctrl+Shift+X) and install
+**PlatformIO IDE** (publisher: PlatformIO) and **Python** (publisher:
+Microsoft).
+
+Then open VS Code. The first time, PlatformIO finishes installing itself in
+the background; watch the bottom-right corner, and restart VS Code when it
+asks.
+
+**B3. Get the code (LAPTOP, VS Code terminal).** Open a terminal with
+Terminal → New Terminal (it's PowerShell). This example keeps the repo in
+Documents:
+```powershell
+cd $HOME\Documents
+git clone https://github.com/gmdb22/SIGNYALES.git
+cd SIGNYALES
+git checkout handoff-4
+git --no-pager log -1 --oneline
+```
+The last line must match the Pi's (A5). Already have a copy? Use the same
+`fetch` and `checkout` steps as in A5.
+
+Then choose File → Open Folder and pick the `SIGNYALES` folder. If VS Code
+asks whether you trust the authors, choose **Yes**. From now on,
+**"repo root"** on the laptop means this folder.
+
+**B4. Make the laptop's Python environment (LAPTOP, VS Code terminal, folder: repo root).**
+```powershell
+py -3.13 -m venv pi-side\venv
+pi-side\venv\Scripts\python.exe -m pip install --upgrade pip
+pi-side\venv\Scripts\python.exe -m pip install -r pi-side\requirements.txt scikit-learn
+pi-side\venv\Scripts\python.exe --version
+```
+This downloads TensorFlow and can take several minutes. The commands call
+the environment's Python directly, so there's no "activate" step (which
+PowerShell sometimes blocks). If VS Code asks which Python interpreter to
+use, choose the one in `pi-side\venv`.
+
+**B5. Open a PlatformIO terminal.** Press Ctrl+Shift+P, type
+`PlatformIO: New Terminal` and press Enter. All firmware commands (Stages 1
+to 4, and 9) go in this terminal: a plain terminal may not find `pio`.
+```powershell
+pio --version
+```
+
+**Report (Part B):** the `log` line from B3, the Python version from B4, and
+the PlatformIO version from B5.
+
+---
+
+## Part C — Test the software (no gloves needed)
+
+These checks run on fake (synthetic) data. Passing them means the files and
+installs are fine; it says nothing about the hardware. If any check fails,
+**stop and report the output**: it means a problem with the files or the
+install, not the hardware. Some checks print warnings along the way (for
+example about a missing model or speech); that's normal, so judge each one
+by its last line.
+
+**C1. Laptop (LAPTOP, VS Code terminal, folder: repo root).**
+```powershell
+pi-side\venv\Scripts\python.exe gui\tests\test_gui_core.py
+pi-side\venv\Scripts\python.exe gui\core\run_native_tests.py
+pi-side\venv\Scripts\python.exe training\tests\test_train_smoke.py
+cd pi-side
+venv\Scripts\python.exe tests\test_frame_roundtrip.py
+venv\Scripts\python.exe tests\test_hub_units.py
+venv\Scripts\python.exe -m signyales_hub.main --simulate --no-tts -v
+cd ..
+```
+
+| Command | Pass looks like |
+|---|---|
+| `test_gui_core.py` | Ends with `All GUI core checks passed` |
+| `run_native_tests.py` | Ends with `ALL NATIVE LOGIC TESTS PASSED`. If it says `SKIPPED: g++ not found`, that's fine: write "skipped" (the project's automatic checks on GitHub run it). |
+| `test_train_smoke.py` (1 to 3 minutes) | Ends with `All training smoke checks passed` |
+| `test_frame_roundtrip.py` | `PASS: frame format round-trips correctly...` |
+| `test_hub_units.py` | Ends with `All Pi-side unit checks passed` |
+| `signyales_hub.main --simulate` | Keeps running. It logs `Running in --simulate mode` and a `No model loaded` warning, both normal. After about 10 seconds press Ctrl+C. A `Traceback` or `ERROR` line is a fail. |
+
+**Optional, the same checks as buttons.** From the repo root, run
+`pi-side\venv\Scripts\python.exe gui\signyales_gui.py`. In **Testing** mode,
+press **Run all software checks**; **Subtitle and speaker check** also
+tests the laptop's own screen and speaker. Each button shows its command and
+output in the log.
+
+**C2. Pi (PI, venv active).**
+```bash
+python tests/test_frame_roundtrip.py
+python tests/test_hub_units.py
+python ../gui/tests/test_gui_core.py
+python tools/live_view.py --simulate --duration 3
+python -m signyales_hub.main --simulate --no-tts -v
+```
+Pass looks the same as on the laptop. `live_view.py` prints fake values for
+3 seconds, then a summary with each finger's min/max. Stop `main` with
+Ctrl+C after about 10 seconds. The training smoke test isn't run on the Pi:
+training happens on the laptop.
+
+**Report (Part C):** the last line of each command, on each machine, and any
+`Traceback` or `ERROR` line in full.
+
+---
+
+## Before the hardware stages, and what to watch for
 
 **Safety first: do these before powering anything.**
 
@@ -62,30 +400,30 @@ report back.
 **How to record what you see**
 
 - Copy raw numbers and pasted output into the log form, not summaries.
-- Record the repo version (`git rev-parse --short HEAD`), the Pi model, and the PlatformIO version.
+- Record the versions from Parts A and B: the `git --no-pager log -1 --oneline` line from both machines, the Pi model, OS and Python version, and the laptop's Python and PlatformIO versions.
 - If anything looks wrong, stop and report the exact output instead of editing firmware yourself.
 
 ---
 
-## Testing proceeds in these stages (1 to 9, including 1b, 6b, 7b and 7c), in this exact order
+## Hardware stages (1 to 9, including 1b, 6b, 7b and 7c), in this exact order
 
-Do not skip ahead — each stage assumes the previous one already works. If a
+Finish Parts A to C first. Do not skip ahead — each stage assumes the previous one already works. If a
 later stage fails, the most likely cause is something in an earlier stage
 that looked fine but wasn't.
 
 ### Stage 1 — Confirm the code compiles (no hardware needed yet)
 
-Open the repo folder in VSCode. In a PlatformIO terminal:
+LAPTOP, in the PlatformIO terminal (Part B5), starting from the repo root:
 
-(ctrl + shit + P : search PlatformIO)
-
-```bash
+```powershell
 cd firmware/glove
 pio run -e left_glove
 pio run -e right_glove
 cd ../receiver
 pio run
+cd ../..
 ```
+The last line goes back to the repo root for Stage 1b.
 
 **Expected result:** Each command ends with `[SUCCESS]`. If you see a
 compile error instead, **stop here and report the exact error text back** —
@@ -100,19 +438,33 @@ don't try to fix firmware code yourself unless asked to.
 receiver's address, the gloves transmit to nowhere and every glove will
 show `ratio=0.0%` in Stage 4. Do this first:
 
-1. Plug in **only the receiver ESP32** and flash the utility:
-   ```bash
+1. Plug in **only the receiver ESP32** and flash the utility (LAPTOP,
+   PlatformIO terminal, starting from the repo root):
+   ```powershell
    cd firmware/tools/get_mac_address
    pio run -t upload
    pio device monitor
    ```
-2. It prints a line like `MAC Address: AA:BB:CC:DD:EE:FF` (yours will differ). Copy it.
-3. Open `firmware/glove/src/config.h` and change the `RECEIVER_MAC` line,
-   one `0x..` per byte, for example `AA:BB:CC:11:22:33` becomes:
+2. It prints a line like `MAC Address: AA:BB:CC:DD:EE:FF` (yours will
+   differ). Copy it, then close the monitor with Ctrl+C and go back to the
+   repo root:
+   ```powershell
+   cd ../../..
+   ```
+3. Open the glove's settings file in VS Code:
+   ```powershell
+   code firmware\glove\src\config.h
+   ```
+   Change the `RECEIVER_MAC` line, one `0x..` per byte. For example,
+   `AA:BB:CC:11:22:33` becomes:
    ```
    static uint8_t RECEIVER_MAC[6] = {0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33};
    ```
-4. Save, then continue to Stage 2 (both gloves will be flashed with the new
+   Save (Ctrl+S), then check the line now shows your address:
+   ```powershell
+   Select-String -Path firmware\glove\src\config.h -Pattern RECEIVER_MAC
+   ```
+4. Continue to Stage 2 (both gloves will be flashed with the new
    address). The real receiver firmware replaces this utility in Stage 4.
 
 **Report back:** the MAC address you read.
@@ -121,16 +473,23 @@ show `ratio=0.0%` in Stage 4. Do this first:
 
 ### Stage 2 — Flash and test one glove in isolation
 
-```bash
+LAPTOP, PlatformIO terminal, starting from the repo root, with only the
+left glove plugged in:
+```powershell
 cd firmware/glove
 pio run -e left_glove -t upload
 pio device monitor
 ```
+Close the monitor with Ctrl+C before uploading to another board.
 
-(If `upload` fails asking you to specify a port, connect only one board at
-a time to avoid ambiguity, or add `--upload-port` — VSCode's PlatformIO
-sidebar also lets you pick the port visually if the command line is
-fiddly.)
+If `upload` fails because it can't find or choose the port, connect only one
+board at a time. If it still fails, list the ports and name the right one
+(replace `COM5` with the port shown for your board):
+```powershell
+pio device list
+pio run -e left_glove -t upload --upload-port COM5
+pio device monitor --port COM5
+```
 
 **Expected result in the serial monitor:**
 ```
@@ -162,17 +521,21 @@ note which finger — that sensor likely isn't wired correctly.
 
 ### Stage 3 — Repeat for the second glove
 
-Same as Stage 2, but:
-```bash
+Same as Stage 2, with only the right glove plugged in (LAPTOP, PlatformIO
+terminal, folder `firmware/glove`):
+```powershell
 pio run -e right_glove -t upload
+pio device monitor
 ```
-and confirm it prints `This unit: RIGHT` instead of `LEFT`.
+Calibrate it the same way (`c`, then Enter), and confirm it prints `This unit: RIGHT` instead of `LEFT`.
 
 ---
 
 ### Stage 4 — Flash the receiver and confirm it sees both gloves
 
-```bash
+LAPTOP, PlatformIO terminal, from `firmware/glove`, with only the receiver
+plugged in:
+```powershell
 cd ../receiver
 pio run -t upload
 pio device monitor
@@ -221,24 +584,24 @@ Report this output exactly, whatever it shows.
 ```bash
 sudo raspi-config
 ```
-Interface Options → Serial Port → **No** to login shell over serial,
-**Yes** to serial hardware → Finish. Then:
+It opens a menu (use the arrow keys, Enter and Tab): Interface Options →
+Serial Port → **No** to login shell over serial, **Yes** to serial
+hardware → Finish. Then add `dtparam=uart0=on` to the end of
+`/boot/firmware/config.txt` (the first command only adds it if it isn't
+there yet), check it, and restart:
 ```bash
-sudo nano /boot/firmware/config.txt
-```
-Add this line at the end, save (Ctrl+O, Enter, Ctrl+X):
-```
-dtparam=uart0=on
-```
-```bash
+grep -q '^dtparam=uart0=on' /boot/firmware/config.txt || echo 'dtparam=uart0=on' | sudo tee -a /boot/firmware/config.txt
+tail -n 3 /boot/firmware/config.txt
 sudo reboot
 ```
+The `tail` output should end with `dtparam=uart0=on`. (To edit the file by
+hand instead: `sudo nano /boot/firmware/config.txt`, add the line at the
+end, then Ctrl+O, Enter, Ctrl+X.)
 
 **Step 3 — loopback test (receiver NOT connected yet).** Use a single
 jumper wire to connect GPIO14 (pin 8) directly to GPIO15 (pin 10) — this
 makes the Pi talk to itself so we can test the port in isolation, before
-any receiver wiring could confuse the result. In the `pi-side` venv (if it doesn't exist yet, create it first with the
-four commands at the start of Stage 6, then come back here):
+any receiver wiring could confuse the result. PI, venv active (Part A6):
 ```bash
 python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
 ```
@@ -250,45 +613,22 @@ python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1)
   `/dev/serial0`) in every command for the rest of this guide.
 - **If the device doesn't exist, or it printed `b''`:** stop and report
   the Step 1 output plus the exact error. As a fallback ONLY after
-  reporting that, you can try adding `dtoverlay=disable-bt` to the same
-  config.txt and rebooting, then repeat the loopback test.
+  reporting that, you can add `dtoverlay=disable-bt` to the same file,
+  restart, and repeat the loopback test:
+  ```bash
+  grep -q '^dtoverlay=disable-bt' /boot/firmware/config.txt || echo 'dtoverlay=disable-bt' | sudo tee -a /boot/firmware/config.txt
+  sudo reboot
+  ```
 
 ---
 
 ### Stage 6 — Run the Pi-side software
 
-On the Raspberry Pi itself (not your laptop):
+On the Raspberry Pi itself (not your laptop), venv active. The software was
+installed in Part A6 and checked without hardware in Part C2.
 
-```bash
-cd pi-side
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-sudo apt install espeak-ng
-```
-
-`espeak-ng` is what makes spoken output work (needed in Stages 6b and 7).
-`requirements.txt` installs full `tensorflow`, which is large and may fail
-on the Pi. No model exists yet, so it is not needed for Stages 5 to 7b: if
-the install fails, report the error and run this instead:
-```bash
-pip install pyserial numpy pyttsx3 pyfiglet gpiozero lgpio
-```
-(The fallback is untested; the project's CI notes say the hub runs without
-TensorFlow when no model is present.)
-
-First, a test that needs no hardware at all, to confirm the software
-itself is intact:
-```bash
-python tests/test_frame_roundtrip.py
-```
-**Expected:** `PASS: frame format round-trips correctly...`. If this fails,
-report it immediately — it means something about the files you received is
-different from what was tested, not a hardware problem.
-
-Then, with the receiver wired up and both gloves powered on, **from `pi-side/`
-with the venv active**, watch the live data for 30 seconds while you open and
-close the fingers of both hands:
+With the receiver wired up and both gloves powered on, watch the live data
+for 30 seconds while you open and close the fingers of both hands:
 ```bash
 python tools/live_view.py --port /dev/ttyAMA0 --duration 30
 ```
@@ -314,8 +654,8 @@ corrupt/misframed payload`.
 ### Stage 6b — Subtitle and speaker check (no model or gloves needed)
 
 This checks the two things a user actually sees and hears: the large
-subtitle text and the spoken output. Connect the speaker to the Pi first
-(see "What you'll need"). Then, **from `pi-side/` with the venv active**:
+subtitle text and the spoken output. The speaker should be connected and
+chosen as the output (Part A7). PI, venv active:
 ```bash
 python tools/output_check.py
 ```
@@ -329,13 +669,12 @@ on a monitor plugged into the Pi, it is that monitor. The sound always plays
 on the Pi's speaker.
 
 - No sound, and the summary says `FAILED`: read the error line above the
-  summary. `espeak-ng is not installed` means the `sudo apt install espeak-ng`
-  step in Stage 6 was skipped or failed.
+  summary. `espeak-ng is not installed` means the `sudo apt install` step in
+  Part A3 was skipped or failed.
 - No sound, but the summary says `reported no error`: the software ran, but the
-  audio is going to a different output. Check the speaker is selected as the
-  audio output (on the desktop, right-click the speaker icon in the top bar;
-  without a desktop, `sudo raspi-config`, then System Options, then Audio),
-  and the volume. Then run `python tools/output_check.py --no-subtitle` again.
+  audio is going to a different output. Choose the speaker again and check
+  the volume as in Part A7 (desktop icon or `wpctl`; without a desktop,
+  `sudo raspi-config`, then System Options, then Audio). Then run `python tools/output_check.py --no-subtitle` again.
 - Letters look broken or very wide: make the terminal window wider, or note it.
 
 **Report back:**
@@ -349,11 +688,11 @@ on the Pi's speaker.
 runs these checks as buttons and shows large subtitles. It is **not needed**
 for this guide, and it has not been run on a Raspberry Pi yet, so anything
 you notice is useful. Only if you have time, on the Pi's desktop (not over
-plain SSH), from the repo root:
+plain SSH), from the repo root (`~/SIGNYALES`):
 ```bash
-sudo apt install python3-tk
 pi-side/venv/bin/python gui/signyales_gui.py
 ```
+(`python3-tk`, which it needs, was installed in Part A3.)
 Try Testing mode's **Run all software checks** and **Subtitle and speaker
 check**. Report whether it opened, and any error shown. Close it before
 continuing: it and the other tools can't share the serial port.
@@ -488,7 +827,9 @@ receiver code, not from running it on hardware.)
 
 **Optional, if a second USB cable is available:**
 `python tools/receiver_link_logger.py --port <receiver USB port> --duration 60 --out results/range_<distance>m_run<n>.csv`
-(run from `pi-side/`) logs the stats line to a CSV for later averaging. This
+(run from `pi-side/`) logs the stats line to a CSV for later averaging.
+To find the receiver's USB port, run `ls /dev/ttyACM* /dev/ttyUSB*` on the
+Pi, or `pio device list` on the laptop. This
 tool has not been tested against real hardware.
 
 **Limitation:** the `[stats]` ratio only counts a packet as dropped when a
@@ -513,6 +854,9 @@ viewer's `fresh in` percentages if you ran it.
 Copy this and fill it in:
 
 ```
+Part A (Pi setup):           DONE / PROBLEM — [model, OS, Python | pip install OK or fallback used]
+Part B (laptop setup):       DONE / PROBLEM — [Python version, PlatformIO version]
+Part C (software checks):    laptop PASS / FAIL | Pi PASS / FAIL — [native tests run or skipped]
 Stage 1 (compiles):          PASS / FAIL — [notes]
 Stage 1b (MAC address):      DONE — [address read]
 Stage 2 (left glove):        PASS / FAIL — [calibration numbers]
@@ -526,7 +870,7 @@ Stage 7b (real data):        PASS / FAIL — [notes]
 Stage 7c (readiness checks): alignment OK/NOT OK | repeatability notes | calibration kept after power cycle Y/N | 30-min run summary
 Stage 8 (battery):           left ___ min, right ___ min (or still running at 3h)
 Stage 9 (range, 3 trials each): 1m ___ | 3m ___ | 5m ___ | 10m ___ | wall ___ | body ___
-Pi model / PlatformIO version / repo commit: ___ / ___ / ___
+Repo log line, laptop / Pi: ___ / ___
 ```
 
 ## One general rule while testing
