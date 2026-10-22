@@ -519,7 +519,9 @@ class LaptopActiveView(ttk.Frame):
             ttk.Button(fw, text="Upload to selected port",
                        command=lambda f=folder, e=env, l=label: self.pio(f, e, l, True)).grid(row=i, column=2)
         ttk.Label(fw, text="Upload order: MAC utility on the receiver (Stage 1b), then both gloves, then the "
-                           "receiver. Don't flash a glove build onto the receiver or the reverse.",
+                           "receiver. Don't flash a glove build onto the receiver or the reverse. The glove "
+                           "hardware check is a temporary test for one glove (send s, r, w, i or p); flash the "
+                           "glove firmware back afterwards.",
                   foreground=MUTED, wraplength=760).grid(row=len(tasks.FIRMWARE_TARGETS), column=0,
                                                          columnspan=3, sticky="w", padx=4, pady=2)
 

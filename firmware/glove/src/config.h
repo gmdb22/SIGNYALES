@@ -24,23 +24,43 @@
 #endif
 
 // ---------------------------------------------------------------
-// Flex sensor pins — ESP32-S3 ADC1-capable GPIOs (safe to use even
-// when Wi-Fi/ESP-NOW is active; ADC2 pins are not, on this chip).
-// Adjust to match your actual wiring.
+// Flex sensor pins. Board: original ESP32 (ESP32-DevKitC-32E clone).
+//
+// PROVISIONAL (22 Oct 2026): taken from the glove PCB's KiCad schematic,
+// which has 7 flex connectors J1-J7 (F1-F7) on IO34, IO35, IO32, IO33,
+// IO25, IO26 and IO27. Which connector goes to which finger is not known
+// yet, and whether all 7 sensors will be used is not decided, so this
+// build reads F1-F5 in the finger slots below and ignores F6/F7. Use
+// firmware/tools/glove_hw_check to find out which F is which finger,
+// then set these five lines to match.
+//
+// ADC2 WARNING: on the original ESP32, ADC2 pins (GPIO 0, 2, 4, 12-15,
+// 25-27) cannot be read while Wi-Fi/ESP-NOW is on, and this firmware
+// transmits all the time. Only ADC1 pins (GPIO 32-39) work here. IO25
+// (F5) is ADC2, so FLEX_PIN_PINKY reads nothing until that sensor is
+// rewired to a free ADC1 pin (IO36 = SENSOR_VP or IO39 = SENSOR_VN).
+// The firmware prints a warning at startup for every ADC2 pin below.
 // ---------------------------------------------------------------
-#define FLEX_PIN_THUMB   1
-#define FLEX_PIN_INDEX   2
-#define FLEX_PIN_MIDDLE  3
-#define FLEX_PIN_RING    4
-#define FLEX_PIN_PINKY   5
+#define FLEX_PIN_THUMB   34   // F1 / J1 (finger not confirmed)
+#define FLEX_PIN_INDEX   35   // F2 / J2 (finger not confirmed)
+#define FLEX_PIN_MIDDLE  32   // F3 / J3 (finger not confirmed)
+#define FLEX_PIN_RING    33   // F4 / J4 (finger not confirmed)
+#define FLEX_PIN_PINKY   25   // F5 / J5 (ADC2: unreadable while transmitting)
 #define FLEX_SENSOR_COUNT 5
 
 // ---------------------------------------------------------------
-// IMU (I2C) — defaults assume an MPU6050 on ESP32-S3's default
-// Wire pins. Adjust if your board/wiring differs.
+// IMU (I2C): MPU6050 board ("ITG/MPU", GY-521 type).
+// From the glove PCB schematic: SDA = IO12, SCL = IO14.
+//
+// IO12 WARNING: IO12 is a boot strapping pin on the original ESP32. If
+// it is high at power-on (the IMU board's pull-up resistors do that),
+// the ESP32 sets its flash to 1.8 V and a 3.3 V-flash module such as
+// the WROOM-32E may not start (reset loop or "flash read err"). If that
+// happens, move SDA/SCL to the ESP32's usual I2C pins, IO21 and IO22,
+// and change these two lines to 21 and 22.
 // ---------------------------------------------------------------
-#define IMU_SDA_PIN   8
-#define IMU_SCL_PIN   9
+#define IMU_SDA_PIN   12
+#define IMU_SCL_PIN   14
 #define IMU_I2C_ADDR  0x68   // MPU6050 default (0x69 if AD0 is pulled high)
 
 // ---------------------------------------------------------------

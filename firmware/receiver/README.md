@@ -15,7 +15,8 @@ combined bimanual frame to the Raspberry Pi over UART at a fixed 50 Hz rate.
 
 ## Build steps
 
-1. Board: **ESP32 Dev Module** (or ESP32-S3 — same ESP-NOW APIs).
+1. Board: **ESP32 Dev Module**. The receiver that was bought is a 30-pin ESP32-WROOM-32 DevKit with
+   USB-C; its USB chip looks like a CH340, so Windows may need the CH340 driver to show a COM port.
 2. No extra libraries needed beyond what ships with the ESP32 Arduino core.
 3. Flash `receiver_firmware.ino`. Open Serial Monitor at 115200 baud — on boot
    it prints its own MAC address. **Copy that into `RECEIVER_MAC` in both

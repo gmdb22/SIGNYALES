@@ -19,6 +19,7 @@ FIRMWARE_TARGETS = [
     ("Right glove", FIRMWARE / "glove", "right_glove"),
     ("Receiver", FIRMWARE / "receiver", None),
     ("MAC address utility", FIRMWARE / "tools" / "get_mac_address", None),
+    ("Glove hardware check", FIRMWARE / "tools" / "glove_hw_check", None),
 ]
 
 UART_LOOPBACK = ("import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); "

@@ -129,6 +129,7 @@ jobs:
           - { name: "right glove", dir: "firmware/glove", env: "right_glove" }
           - { name: "receiver", dir: "firmware/receiver", env: "" }
           - { name: "MAC address utility", dir: "firmware/tools/get_mac_address", env: "" }
+          - { name: "glove hardware check", dir: "firmware/tools/glove_hw_check", env: "" }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

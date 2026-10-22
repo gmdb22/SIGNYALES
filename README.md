@@ -7,7 +7,7 @@ gesture recognition → spoken/text output.
 ```
 signyales/
 ├── firmware/
-│   ├── glove/                PlatformIO project — flash onto each glove (ESP32-S3)
+│   ├── glove/                PlatformIO project — flash onto each glove (original ESP32)
 │   ├── receiver/             PlatformIO project — flash onto the receiver (ESP32)
 │   ├── tools/get_mac_address/  One-off utility to read the receiver's MAC address
 │   └── tests/native/         Plain-g++ tests of packet.h / frame.h (no hardware)

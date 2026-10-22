@@ -1,5 +1,5 @@
 /*
-  Signyales — Glove Node Firmware (ESP32-S3)
+  Signyales — Glove Node Firmware (original ESP32)
   ============================================
   Layer 1 of the Signyales pipeline. Reads 5 flex sensors and a 6-axis
   IMU, filters and calibrates the readings, packs them into a
@@ -13,8 +13,9 @@
     - Adafruit MPU6050
     - Adafruit Unified Sensor
 
-  Board: ESP32S3 Dev Module (installed via Boards Manager: esp32 by
-  Espressif Systems)
+  Board: ESP32 Dev Module (esp32dev; the glove PCB uses an
+  ESP32-DevKitC-32E clone). Installed via Boards Manager: esp32 by
+  Espressif Systems.
 
   Serial commands (115200 baud):
     'c'  -> run an 8-second flex calibration routine and save to flash
@@ -106,6 +107,59 @@ void runCalibrationRoutine() {
 }
 
 // ------------------------------------------------------------------
+// Startup checks (original ESP32 only)
+// ------------------------------------------------------------------
+
+// ADC2 pins on the original ESP32. They return no reading while Wi-Fi
+// (and so ESP-NOW) is on. See the ADC2 WARNING in config.h.
+bool isAdc2Pin(int pin) {
+#if CONFIG_IDF_TARGET_ESP32
+  switch (pin) {
+    case 0: case 2: case 4: case 12: case 13: case 14: case 15:
+    case 25: case 26: case 27:
+      return true;
+  }
+#endif
+  (void)pin;
+  return false;
+}
+
+void warnAboutAdc2Pins() {
+  for (int i = 0; i < FLEX_SENSOR_COUNT; i++) {
+    if (isAdc2Pin(flexPins[i])) {
+      Serial.printf("WARNING: flex slot %d is on GPIO%d, an ADC2 pin. It cannot be read "
+                    "while ESP-NOW is on, so it will read 0. Rewire it to an ADC1 pin "
+                    "(GPIO32-39), see config.h.\n", i, flexPins[i]);
+    }
+  }
+}
+
+// Called when mpu.begin() fails: reports what, if anything, answers on
+// the I2C bus, so "not found" can be told apart from "a different chip".
+void reportImuProblem() {
+  bool any = false;
+  for (uint8_t addr = 1; addr < 127; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) {
+      any = true;
+      Serial.printf("  I2C device found at 0x%02X", addr);
+      if (addr == 0x68 || addr == 0x69) {
+        Wire.beginTransmission(addr);
+        Wire.write(0x75); // WHO_AM_I
+        if (Wire.endTransmission(false) == 0 && Wire.requestFrom(addr, (uint8_t)1) == 1) {
+          Serial.printf(", WHO_AM_I=0x%02X (a genuine MPU6050 reports 0x68)", Wire.read());
+        }
+      }
+      Serial.println();
+    }
+  }
+  if (!any) {
+    Serial.printf("  No I2C device answered on SDA=GPIO%d, SCL=GPIO%d. Check the IMU wiring "
+                  "and power.\n", IMU_SDA_PIN, IMU_SCL_PIN);
+  }
+}
+
+// ------------------------------------------------------------------
 // ESP-NOW
 // ------------------------------------------------------------------
 
@@ -183,10 +237,12 @@ void setup() {
   Serial.println("Send 'c' over Serial at any time to (re)run flex calibration.");
 
   analogReadResolution(12); // 0-4095, matches packet.h's assumed range
+  warnAboutAdc2Pins();
 
   Wire.begin(IMU_SDA_PIN, IMU_SCL_PIN);
   if (!mpu.begin(IMU_I2C_ADDR)) {
     Serial.println("FATAL: MPU6050 not found. Check wiring/I2C address. Halting.");
+    reportImuProblem();
     while (true) delay(1000);
   }
   mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
