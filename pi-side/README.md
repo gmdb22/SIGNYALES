@@ -129,11 +129,14 @@ Once the training pipeline produces a model, drop these three files into
 - **`model.tflite`** — the trained, quantized model
 - **`labels.json`** — a JSON list of gesture strings, index-aligned to the
   model's output classes
-- **`scaler.json`** — `{"mean": [...], "std": [...]}`, 22 values each, computed
+- **`scaler.json`** — `{"mean": [...], "std": [...]}`, 24 values each, computed
   on the *same* training data the model was fit on
 
-The 22-value feature order is a hard contract, documented in `config.py`:
-`left_flex(5), right_flex(5), left_accel(3), left_gyro(3), right_accel(3), right_gyro(3)`.
+The 24-value feature order is a hard contract, documented in `config.py`:
+`left_flex(6), right_flex(6), left_accel(3), left_gyro(3), right_accel(3), right_gyro(3)`,
+with flex in the order thumb, index, middle, ring, pinky, palm. (It was 22
+values, 5 flex per glove, until October 2026; older recordings and models
+don't work with the current code.)
 If the training pipeline logs features in a different order, the model will
 silently make predictions on a scrambled input vector — it won't error, it
 will just be wrong in a way that's hard to notice by inspection.

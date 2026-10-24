@@ -131,7 +131,8 @@ class FullscreenSubtitles:
 
 
 class HandStatus(ttk.Frame):
-    """Per-glove light (fresh / stale / no data), fresh %, and 5 finger bars."""
+    """Per-glove light (fresh / stale / no data), fresh %, and one bar per flex
+    sensor (thumb, index, middle, ring, pinky, palm)."""
 
     def __init__(self, master):
         super().__init__(master)
@@ -144,7 +145,7 @@ class HandStatus(ttk.Frame):
             dot.grid(row=0, column=0)
             lbl = ttk.Label(f, text=f"{hand.title()} glove: no data", width=26)
             lbl.grid(row=0, column=1, sticky="w", padx=4)
-            bars = tk.Canvas(f, width=110, height=34, highlightthickness=0, background="#eef1f4")
+            bars = tk.Canvas(f, width=130, height=34, highlightthickness=0, background="#eef1f4")
             bars.grid(row=1, column=0, columnspan=2, sticky="w", pady=2)
             self.rows[hand] = (dot, lbl, bars)
         self.fps = ttk.Label(self, text="", foreground=MUTED)
@@ -158,7 +159,7 @@ class HandStatus(ttk.Frame):
             dot.itemconfigure("dot", fill=colour)
             lbl.configure(text=f"{hand.title()} glove: {pct}% fresh")
             bars.delete("all")
-            for i, v in enumerate(st.get(f"{hand}_flex", [])[:5]):
+            for i, v in enumerate(st.get(f"{hand}_flex", [])[:6]):
                 h = int(30 * max(0, min(v, 4095)) / 4095)
                 bars.create_rectangle(4 + i * 21, 32 - h, 20 + i * 21, 32, fill="#3d6a8a", outline="")
         self.fps.configure(text=f"{st.get('fps', 0)} frames/s (about 50 expected), "

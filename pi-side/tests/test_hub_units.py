@@ -59,24 +59,27 @@ def make_frame(left_flex, right_flex, la, lg, ra, rg):
 
 # ---------------------------------------------------------------- config
 cfg = HubConfig()
-check("config: 22 features, 50-sample window, 0.70 threshold, 3 consecutive",
+check("config: 24 features, 50-sample window, 0.70 threshold, 3 consecutive",
       (cfg.feature_count, cfg.window_size_samples, cfg.confidence_threshold,
-       cfg.debounce_required_consecutive) == (22, 50, 0.70, 3))
+       cfg.debounce_required_consecutive) == (24, 50, 0.70, 3))
+from signyales_hub.serial_link import FLEX_NAMES, FLEX_PER_GLOVE  # noqa: E402
+check("config: feature_count = 2 x 6 flex + 12 accel/gyro, matching serial_link",
+      FLEX_PER_GLOVE == 6 and len(FLEX_NAMES) == 6 and cfg.feature_count == 2 * FLEX_PER_GLOVE + 12)
 check("config: silent_labels is a tuple containing 'rest'",
       isinstance(cfg.silent_labels, tuple) and "rest" in cfg.silent_labels)
 
 # ------------------------------------------------------- extract_features
-frame = make_frame([0, 4095, 1000, 2000, 3000], [10, 20, 30, 40, 50],
+frame = make_frame([0, 4095, 1000, 2000, 3000, 3500], [10, 20, 30, 40, 50, 60],
                    (1.0, 2.0, 3.0), (4.0, 5.0, 6.0), (7.0, 8.0, 9.0), (10.0, 11.0, 12.0))
 f = extract_features(frame)
 check("features: length matches config.feature_count", f.shape == (cfg.feature_count,), f.shape)
 check("features: float32", f.dtype == np.float32, f.dtype)
 check("features: left flex first, scaled by 1/4095",
-      np.allclose(f[0:5], np.array([0, 4095, 1000, 2000, 3000]) / 4095.0))
+      np.allclose(f[0:6], np.array([0, 4095, 1000, 2000, 3000, 3500]) / 4095.0))
 check("features: right flex next, scaled by 1/4095",
-      np.allclose(f[5:10], np.array([10, 20, 30, 40, 50]) / 4095.0))
+      np.allclose(f[6:12], np.array([10, 20, 30, 40, 50, 60]) / 4095.0))
 check("features: then left accel, left gyro, right accel, right gyro (unscaled)",
-      np.allclose(f[10:22], np.arange(1.0, 13.0)), f[10:22])
+      np.allclose(f[12:24], np.arange(1.0, 13.0)), f[12:24])
 
 # ----------------------------------------------------------- WindowBuffer
 wb = WindowBuffer(window_size=4, feature_count=2)
@@ -142,10 +145,10 @@ check("resample: linear ramps stay linear", np.allclose(res[:, 0], np.linspace(0
 
 # ------------------------------------------------- model loader, no model
 with tempfile.TemporaryDirectory() as tmp:
-    clf = GestureClassifier(tmp, expected_window=50, expected_features=22)
+    clf = GestureClassifier(tmp, expected_window=50, expected_features=24)
     check("model: missing files -> available is False", clf.available is False)
     check("model: predict() returns (None, 0.0) without a model",
-          clf.predict(np.zeros((50, 22), dtype=np.float32)) == (None, 0.0))
+          clf.predict(np.zeros((50, 24), dtype=np.float32)) == (None, 0.0))
     check("model: no interpreter library is imported when there is no model",
           not any(m in sys.modules for m in ("tensorflow", "tflite_runtime", "ai_edge_litert")))
 

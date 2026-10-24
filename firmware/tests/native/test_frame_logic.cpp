@@ -28,7 +28,7 @@ static glove_packet_t make_glove_packet(uint8_t id, uint32_t seq) {
     p.seq = seq;
     p.timestamp_ms = 1000;
     p.flex_raw[0] = 100; p.flex_raw[1] = 200; p.flex_raw[2] = 300;
-    p.flex_raw[3] = 400; p.flex_raw[4] = 500;
+    p.flex_raw[3] = 400; p.flex_raw[4] = 500; p.flex_raw[5] = 600;
     p.accel[0] = 0.1f; p.accel[1] = 0.2f; p.accel[2] = 9.8f;
     p.gyro[0] = 1.0f; p.gyro[1] = 2.0f; p.gyro[2] = 3.0f;
     p.checksum = compute_checksum(&p);
@@ -38,12 +38,12 @@ static glove_packet_t make_glove_packet(uint8_t id, uint32_t seq) {
 int main(void) {
     printf("=== Signyales native frame logic test ===\n\n");
 
-    // Expected size: 4+4+1+1 + 44 + 44 + 1 = 99 bytes.
+    // Expected size: 4+4+1+1 + 46 + 46 + 1 = 103 bytes (6 flex sensors per glove).
     // This number matters beyond this test: pi-side/signyales_hub/serial_link.py
     // hardcodes the equivalent size via its FRAME_FMT struct string — if this
     // ever drifts, that Python file needs updating in the same commit.
-    CHECK("combined_frame_t is exactly 99 bytes (no padding)",
-          sizeof(combined_frame_t) == 99);
+    CHECK("combined_frame_t is exactly 103 bytes (no padding)",
+          sizeof(combined_frame_t) == 103);
 
     combined_frame_t frame;
     memset(&frame, 0, sizeof(frame));

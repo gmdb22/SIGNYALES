@@ -161,7 +161,7 @@ python training/tests/test_train_smoke.py      (from the repo root)
   split (never on validation/test — that would leak test statistics into
   training and make reported accuracy look better than it really is)
 
-The 22-feature order (`left_flex(5), right_flex(5), left_accel(3),
+The 24-feature order (`left_flex(6), right_flex(6), left_accel(3),
 left_gyro(3), right_accel(3), right_gyro(3)`) is fixed by
 `collect_gesture.py`/`windowing.py` on the hub side. This pipeline never
 needs to know that order explicitly — it just trusts whatever shape the

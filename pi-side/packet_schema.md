@@ -35,7 +35,9 @@
 >
 > The two open questions in the original draft were confirmed during
 > implementation: **5 flex sensors per glove** (one per finger), and an
-> **MPU6050** IMU.
+> **MPU6050** IMU. In October 2026 this became **6 flex sensors per glove**
+> (5 fingers + 1 palm sensor), so a glove packet is now 46 bytes and the
+> receiver's frame 103 bytes.
 >
 > This file is kept as a record of the design decision, not as the current
 > source of truth — see the linked files above for that.

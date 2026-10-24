@@ -36,9 +36,12 @@ class HubConfig:
     # This order is a CONTRACT with the training pipeline. Changing it
     # here without retraining/re-exporting the model will silently
     # produce garbage predictions.
-    # [left_flex(5), right_flex(5), left_accel(3), left_gyro(3),
-    #  right_accel(3), right_gyro(3)] = 22 features per timestep
-    feature_count: int = 22
+    # [left_flex(6), right_flex(6), left_accel(3), left_gyro(3),
+    #  right_accel(3), right_gyro(3)] = 24 features per timestep.
+    # Flex per glove = 5 fingers + 1 palm (serial_link.FLEX_PER_GLOVE).
+    # Was 22 (5 flex per glove) before October 2026: models trained on
+    # 22 features are refused by model_runtime and must be retrained.
+    feature_count: int = 24
 
     # --- Model artifacts ---
     # A model "directory" is expected to contain three files, all

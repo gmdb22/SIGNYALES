@@ -24,29 +24,32 @@
 #endif
 
 // ---------------------------------------------------------------
-// Flex sensor pins. Board: original ESP32 (ESP32-DevKitC-32E clone).
+// Flex sensor pins: 6 per glove (5 fingers + 1 palm), decided 24-25 Oct
+// 2026. Board: original ESP32 (ESP32-DevKitC-32E clone).
 //
-// PROVISIONAL (22 Oct 2026): taken from the glove PCB's KiCad schematic,
-// which has 7 flex connectors J1-J7 (F1-F7) on IO34, IO35, IO32, IO33,
-// IO25, IO26 and IO27. Which connector goes to which finger is not known
-// yet, and whether all 7 sensors will be used is not decided, so this
-// build reads F1-F5 in the finger slots below and ignores F6/F7. Use
-// firmware/tools/glove_hw_check to find out which F is which finger,
-// then set these five lines to match.
+// The connectors are swappable; the agreed plug-in order is
+// J1 thumb, J2 index, J3 middle, J4 ring, J5 pinky, J6 palm (J7 unused).
+//
+// These pins assume the planned rework of the glove PCB:
+//   - J5's signal point jumpered to IO36 (SENSOR_VP)
+//   - J6's signal point jumpered to IO39 (SENSOR_VN)
+//   - all divider resistors (R1-R6) changed from 470 ohm to 47 kOhm
+// Before that rework, pinky and palm read an unconnected pin (noise) and
+// every finger's reading barely moves.
 //
 // ADC2 WARNING: on the original ESP32, ADC2 pins (GPIO 0, 2, 4, 12-15,
 // 25-27) cannot be read while Wi-Fi/ESP-NOW is on, and this firmware
-// transmits all the time. Only ADC1 pins (GPIO 32-39) work here. IO25
-// (F5) is ADC2, so FLEX_PIN_PINKY reads nothing until that sensor is
-// rewired to a free ADC1 pin (IO36 = SENSOR_VP or IO39 = SENSOR_VN).
-// The firmware prints a warning at startup for every ADC2 pin below.
+// transmits all the time. That is why J5 and J6 (on IO25/IO26 in the
+// PCB schematic) are moved to IO36/IO39. Only ADC1 pins (GPIO 32-39)
+// work here. The firmware prints a warning at startup for any ADC2 pin.
 // ---------------------------------------------------------------
-#define FLEX_PIN_THUMB   34   // F1 / J1 (finger not confirmed)
-#define FLEX_PIN_INDEX   35   // F2 / J2 (finger not confirmed)
-#define FLEX_PIN_MIDDLE  32   // F3 / J3 (finger not confirmed)
-#define FLEX_PIN_RING    33   // F4 / J4 (finger not confirmed)
-#define FLEX_PIN_PINKY   25   // F5 / J5 (ADC2: unreadable while transmitting)
-#define FLEX_SENSOR_COUNT 5
+#define FLEX_PIN_THUMB   34   // J1
+#define FLEX_PIN_INDEX   35   // J2
+#define FLEX_PIN_MIDDLE  32   // J3
+#define FLEX_PIN_RING    33   // J4
+#define FLEX_PIN_PINKY   36   // J5, via jumper to IO36 (SENSOR_VP)
+#define FLEX_PIN_PALM    39   // J6, via jumper to IO39 (SENSOR_VN)
+#define FLEX_SENSOR_COUNT 6
 
 // ---------------------------------------------------------------
 // IMU (I2C): MPU6050 board ("ITG/MPU", GY-521 type).
@@ -89,5 +92,7 @@ static uint8_t RECEIVER_MAC[6] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
 
 // ---------------------------------------------------------------
 // Flash storage namespace for per-glove flex calibration.
+// Changed from "signyales" when the sensors went from 5 to 6 (Oct 2026)
+// so an old 5-sensor calibration is never loaded for the new pins.
 // ---------------------------------------------------------------
-#define CALIBRATION_NAMESPACE "signyales"
+#define CALIBRATION_NAMESPACE "signyales6"

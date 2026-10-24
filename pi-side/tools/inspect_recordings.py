@@ -11,9 +11,9 @@ average value barely differs between two gestures (relative to how much the
 same gesture varies) are flagged, since they can't help tell those gestures
 apart.
 
-Feature layout (see signyales_hub/windowing.py): columns 0-4 left flex,
-5-9 right flex, 10-21 accel/gyro. Flex is stored scaled to 0-1 and shown
-here back in raw counts (0-4095).
+Feature layout (see signyales_hub/windowing.py): columns 0-5 left flex,
+6-11 right flex (thumb, index, middle, ring, pinky, palm), 12-23 accel/gyro.
+Flex is stored scaled to 0-1 and shown here back in raw counts (0-4095).
 
 Thresholds below are heuristics chosen for this tool, not proposal values.
 
@@ -23,13 +23,18 @@ Usage (from pi-side/, venv active):
 
 import argparse
 import itertools
+import sys
 from pathlib import Path
 
 import numpy as np
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from signyales_hub.serial_link import FLEX_NAMES, FLEX_PER_GLOVE  # noqa: E402
+
 FLAT_STD_COUNTS = 5.0      # a hand whose flex never changes more than this is "flat"
 MIN_REPS_WARN = 5
-NAMES = [f"L{i}" for i in range(5)] + [f"R{i}" for i in range(5)]
+F = FLEX_PER_GLOVE
+NAMES = [f"L{n[:3]}" for n in FLEX_NAMES] + [f"R{n[:3]}" for n in FLEX_NAMES]  # e.g. Lthu ... Rpal
 
 
 def load_label(label_dir: Path):
@@ -37,7 +42,7 @@ def load_label(label_dir: Path):
     for f in sorted(label_dir.glob("rep_*.npz")):
         with np.load(f) as z:
             reps.append(z["features"])
-    return np.stack(reps) if reps else None  # (N, T, 22)
+    return np.stack(reps) if reps else None  # (N, T, 24)
 
 
 def main():
@@ -60,8 +65,12 @@ def main():
     means, stds, problems = {}, {}, []
     for label, arr in data.items():
         n, t, f = arr.shape
-        flex_counts = arr[:, :, :10] * 4095.0               # (N, T, 10)
-        rep_mean = flex_counts.mean(axis=1)                  # (N, 10)
+        if f != 2 * F + 12:
+            problems.append(f"{label}: {f} features per sample, expected {2 * F + 12} "
+                            f"({F} flex per glove). Recorded with an older format? Re-record it.")
+            continue
+        flex_counts = arr[:, :, :2 * F] * 4095.0            # (N, T, 12)
+        rep_mean = flex_counts.mean(axis=1)                  # (N, 12)
         means[label] = rep_mean.mean(axis=0)
         stds[label] = rep_mean.std(axis=0)                   # variation across reps
         motion = flex_counts.std(axis=1).mean(axis=0)        # movement inside a rep
@@ -75,19 +84,19 @@ def main():
         print("   mean    : " + " ".join(f"{v:6.0f}" for v in means[label]))
         print("   std/reps: " + " ".join(f"{v:6.0f}" for v in stds[label]))
         print("   in-rep  : " + " ".join(f"{v:6.0f}" for v in motion))
-        for hand, sl in (("left", slice(0, 5)), ("right", slice(5, 10))):
+        for hand, sl in (("left", slice(0, F)), ("right", slice(F, 2 * F))):
             if motion[sl].max() < FLAT_STD_COUNTS:
                 problems.append(f"{label}: {hand} hand flex never moved inside a rep "
                                 f"(stale side, or hand genuinely still)")
         print()
 
-    if len(data) > 1:
+    if len(means) > 1:
         print("Label vs label: channels that do NOT separate the two gestures")
         any_flag = False
-        for a, b in itertools.combinations(data, 2):
+        for a, b in itertools.combinations(means, 2):
             diff = np.abs(means[a] - means[b])
             noise = np.maximum(stds[a], stds[b])
-            bad = [NAMES[i] for i in range(10) if diff[i] <= noise[i]]
+            bad = [NAMES[i] for i in range(2 * F) if diff[i] <= noise[i]]
             if bad:
                 any_flag = True
                 print(f"   {a} vs {b}: {' '.join(bad)}")

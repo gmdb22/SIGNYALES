@@ -21,14 +21,19 @@
 #define GLOVE_ID_LEFT  0
 #define GLOVE_ID_RIGHT 1
 
+// Flex sensors per glove: 5 fingers + 1 palm sensor (October 2026 design).
+// Changing this changes the wire format: update the Pi's serial_link.py
+// (FLEX_PER_GLOVE) and config.py (feature_count), and retrain the model.
+#define FLEX_PER_GLOVE 6
+
 #pragma pack(push, 1)
 typedef struct {
   uint8_t  glove_id;         // GLOVE_ID_LEFT or GLOVE_ID_RIGHT
   uint32_t seq;              // increasing sequence number (wraps at UINT32_MAX) — lets the
                              // receiver detect dropped or out-of-order packets
   uint32_t timestamp_ms;     // millis() on the glove at the moment of sampling
-  uint16_t flex_raw[5];      // calibrated 0-4095 flex readings, in this fixed order:
-                             // [0]=thumb [1]=index [2]=middle [3]=ring [4]=pinky
+  uint16_t flex_raw[FLEX_PER_GLOVE]; // calibrated 0-4095 flex readings, in this fixed order:
+                             // [0]=thumb [1]=index [2]=middle [3]=ring [4]=pinky [5]=palm
   float    accel[3];         // ax, ay, az in g
   float    gyro[3];          // gx, gy, gz in deg/s
   uint8_t  checksum;         // simple additive checksum over every byte above

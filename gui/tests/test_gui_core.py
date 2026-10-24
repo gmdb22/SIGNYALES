@@ -45,7 +45,7 @@ def wait_for(pred, timeout=5.0):
 
 def frame(seq, left_valid=True, right_valid=True, flex=1000):
     def glove(gid):
-        return {"glove_id": gid, "seq": seq, "timestamp_ms": seq * 20, "flex": (flex,) * 5,
+        return {"glove_id": gid, "seq": seq, "timestamp_ms": seq * 20, "flex": (flex,) * 6,
                 "accel": (0.0, 0.0, 1.0), "gyro": (0.0, 0.0, 0.0), "checksum": 0}
     return {"frame_seq": seq, "frame_timestamp_ms": seq * 20, "left_valid": left_valid,
             "right_valid": right_valid, "left": glove(0), "right": glove(1), "checksum": 0}
@@ -60,7 +60,7 @@ class FakeClassifier:
         self._script = list(script)
 
     def predict(self, window):
-        assert window.shape == (50, 22)
+        assert window.shape == (50, 24)
         return (self._script.pop(0), 0.95) if self._script else ("rest", 0.95)
 
 
@@ -126,7 +126,7 @@ check("live: simulated source gives status events without a model", got_status)
 check("live: stop() ends the thread", not p.running)
 st = [e for e in events if e["type"] == "status"][0]
 check("live: status has fps, fresh % and flex values",
-      st["fps"] > 0 and st["left_fresh_pct"] == 100 and len(st["right_flex"]) == 5)
+      st["fps"] > 0 and st["left_fresh_pct"] == 100 and len(st["right_flex"]) == 6)
 
 # ---------------------------------------------------------------- recorder
 with tempfile.TemporaryDirectory() as tmp:
@@ -135,14 +135,14 @@ with tempfile.TemporaryDirectory() as tmp:
           and recorder.check_label("salamat") is None and recorder.check_label("rest") is None)
     rec.start_rep()
     for i in range(37):
-        rec.on_frame(frame(i), np.full(22, i, dtype=np.float32))
+        rec.on_frame(frame(i), np.full(24, i, dtype=np.float32))
     path, n = rec.stop_rep("salamat")
     with np.load(path) as data:          # close the file: Windows can't delete open files
         shape, label = data["features"].shape, str(data["label"])
     check("recorder: saves rep_0000.npz like collect_gesture.py",
-          path.name == "rep_0000.npz" and shape == (50, 22) and label == "salamat" and n == 37)
+          path.name == "rep_0000.npz" and shape == (50, 24) and label == "salamat" and n == 37)
     rec.start_rep()
-    rec.on_frame(frame(1), np.zeros(22, dtype=np.float32))
+    rec.on_frame(frame(1), np.zeros(24, dtype=np.float32))
     try:
         rec.stop_rep("salamat")
         short_ok = False
@@ -151,14 +151,14 @@ with tempfile.TemporaryDirectory() as tmp:
     check("recorder: a 1-frame repetition is refused", short_ok)
     rec.start_rep()
     for i in range(10):
-        rec.on_frame(frame(i), np.zeros(22, dtype=np.float32))
+        rec.on_frame(frame(i), np.zeros(24, dtype=np.float32))
     path2, _ = rec.stop_rep("salamat")
     check("recorder: numbering continues", path2.name == "rep_0001.npz"
           and recorder.count_reps(tmp, "salamat") == 2)
     check("recorder: frames are ignored when not recording", not rec.recording)
     rec.start_rep()
     for i in range(3):
-        rec.on_frame(frame(i), np.zeros(22, dtype=np.float32))
+        rec.on_frame(frame(i), np.zeros(24, dtype=np.float32))
     check("recorder: frame_count shows frames in the current repetition", rec.frame_count == 3)
     rec.cancel_rep()
     check("recorder: frame_count is 0 when not recording", rec.frame_count == 0)
@@ -172,7 +172,7 @@ with tempfile.TemporaryDirectory() as tmp:
     for word in ("salamat", "oo"):
         (sess / word).mkdir(parents=True)
         for r in range(recorder.MIN_REPS_PER_WORD):
-            np.savez(sess / word / f"rep_{r:04d}.npz", features=np.zeros((50, 22), np.float32), label=word)
+            np.savez(sess / word / f"rep_{r:04d}.npz", features=np.zeros((50, 24), np.float32), label=word)
     ok, msg, words = recorder.describe_data_folder(root)
     check("data folder: picking the parent of sessions is explained", not ok and "W01_S01" in msg, msg)
     ok, msg, words = recorder.describe_data_folder(sess)
@@ -181,11 +181,11 @@ with tempfile.TemporaryDirectory() as tmp:
     (sess / "oo" / "rep_0009.npz").unlink()
     ok, msg, words = recorder.describe_data_folder(sess)
     check("data folder: a word with fewer than 10 recordings is refused", not ok and "oo (9)" in msg, msg)
-    np.savez(sess / "oo" / "rep_0009.npz", features=np.zeros((50, 22), np.float32), label="oo")
+    np.savez(sess / "oo" / "rep_0009.npz", features=np.zeros((50, 24), np.float32), label="oo")
     ok, msg, words = recorder.describe_data_folder(sess / "salamat")
     check("data folder: a single word folder is refused", not ok)
     (sess / "_stage7b").mkdir()
-    np.savez(sess / "_stage7b" / "rep_0000.npz", features=np.zeros((50, 22), np.float32), label="x")
+    np.savez(sess / "_stage7b" / "rep_0000.npz", features=np.zeros((50, 24), np.float32), label="x")
     ok, msg, words = recorder.describe_data_folder(sess)
     check("data folder: '_' folders are not counted (like training)", "_stage7b" not in words)
 

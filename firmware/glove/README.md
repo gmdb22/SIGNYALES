@@ -22,30 +22,36 @@ actually built (October 2026) use different parts, so these are now:
 
 - **MCU:** original ESP32, on an ESP32-DevKitC-32E clone (CP210x USB
   chip). PlatformIO board `esp32dev`.
-- **Flex sensors:** the glove PCB's schematic has **7** connectors (J1–J7,
-  F1–F7) on IO34, IO35, IO32, IO33, IO25, IO26 and IO27, each through a
-  divider to 3.3 V. The firmware and the frame still carry **5** values;
-  whether to use all 7 is not decided yet. `config.h` currently reads
-  F1–F5 in the five finger slots. Which connector is which finger is not
-  confirmed yet.
+- **Flex sensors: 6 per glove** (5 fingers + 1 palm), decided 24–25 Oct
+  2026. The PCB has 7 connectors (J1–J7); J7 is not used. Plug-in order:
+  J1 thumb, J2 index, J3 middle, J4 ring, J5 pinky, J6 palm. The palm
+  sensor's orientation (horizontal or diagonal) is still open. Pins after
+  the planned rework: thumb IO34, index IO35, middle IO32, ring IO33,
+  pinky IO36 (jumper from J5), palm IO39 (jumper from J6).
 - **IMU:** MPU6050 board marked "ITG/MPU" (GY-521 type) over I2C,
   SDA = IO12, SCL = IO14 (from the schematic).
 
-**Known wiring problems in the schematic (not yet fixed on the boards):**
+**Planned rework of each glove PCB (not done yet):**
 
-- IO25, IO26 and IO27 are ADC2 pins. On the original ESP32 they can't be
-  read while Wi-Fi/ESP-NOW is on, so F5–F7 are expected to read 0 in the
-  real firmware (from the ESP32 documentation; not yet seen on the gloves).
-  The fix is to move those sensors to free ADC1 pins (IO36/SENSOR_VP,
-  IO39/SENSOR_VN). The firmware prints a warning at startup for each one.
-- IO12 is a boot strapping pin. If the IMU's pull-up holds it high at
-  power-on, the board may not start. The fix is to move SDA/SCL to IO21
-  and IO22 and change `IMU_SDA_PIN`/`IMU_SCL_PIN`.
-- The divider resistors fitted are 470 Ω, not the schematic's 47 kΩ. With
-  470 Ω the readings hardly change when a finger bends.
+- Replace R1–R6 (470 Ω fitted) with **47 kΩ**, as in the schematic. With
+  470 Ω the readings hardly change when a finger bends. R7 is not needed.
+- Jumper **J5's signal point → IO36** (SENSOR_VP) and **J6's signal point →
+  IO39** (SENSOR_VN). In the schematic J5–J7 are on IO25–IO27, which are
+  ADC2 pins: on the original ESP32 they can't be read while Wi-Fi/ESP-NOW
+  is on (ESP-IDF documentation). The old tracks can stay; the firmware
+  leaves IO25–IO27 as plain inputs. The ESP32 board has only 6 pins that
+  work while transmitting (IO32–IO36, IO39), which is why there are 6
+  sensors.
+- IO12 (the IMU's SDA) is a boot strapping pin and could stop the board
+  from starting. The assembler reports that the board starts normally, so
+  no change is planned; if it ever doesn't start, move SDA/SCL to IO21/IO22
+  and change `IMU_SDA_PIN`/`IMU_SCL_PIN`.
 
-Adjust the pin numbers in `config.h` if your wiring differs — nothing else
-in the firmware needs to change while there are 5 sensors.
+Before the rework, the pinky and palm slots read unconnected pins (noise).
+
+Adjust the pin numbers in `config.h` if your wiring differs. The number
+of sensors (`FLEX_PER_GLOVE` in `packet.h`) is part of the data format:
+changing it also means changing the Pi side and retraining.
 
 ## Hardware check (before the first real flash)
 
@@ -53,7 +59,9 @@ in the firmware needs to change while there are 5 sensors.
 glove. It sends nothing wirelessly and doesn't touch the saved
 calibration. It prints the chip and why it last reset, scans for the
 motion sensor on IO12/IO14 and on IO21/IO22 (and reports its WHO_AM_I
-value), then shows all 7 flex readings four times a second.
+value), then shows the flex readings four times a second: the 6 pins the
+glove firmware uses (J1 thumb … J6 palm) and, for comparison, the
+schematic's original J5–J7 pins (IO25–IO27).
 
 ```
 # PowerShell, PlatformIO terminal, folder: firmware\tools\glove_hw_check
@@ -66,8 +74,8 @@ In the monitor, type a letter and press Enter:
 | Key | What it does |
 |---|---|
 | `r` then bend each finger fully a few times, then `s` | Shows each sensor's low, high and spread: tells you whether the resistors give a usable range |
-| bend one finger at a time | Shows which F (J1–J7) is which finger |
-| `w` | Turns Wi-Fi on or off. With it on, F5–F7 (ADC2) should stop changing, as in the real firmware. Press `r` after switching. |
+| bend one finger (or the palm) at a time | Checks each J is plugged into the right sensor |
+| `w` | Turns Wi-Fi on or off. With it on, the old J5–J7 pins (ADC2) should stop changing, as in the real firmware; IO36/IO39 keep working. Press `r` after switching. |
 | `i` | Scans for the motion sensor again |
 | `p` | Pauses or resumes the readings |
 
@@ -96,8 +104,8 @@ run on the real gloves yet.
 
 Flex sensors vary from unit to unit, so raw ADC values alone aren't
 comparable across fingers or across gloves. Send `c` over Serial at any
-time to run an 8-second calibration: flex and relax every finger fully
-during that window. The captured min/max per finger is saved to flash
+time to run an 8-second calibration: flex and relax every finger and the
+palm fully during that window. The captured min/max per sensor is saved to flash
 (NVS) and survives reboots — you only need to redo it if the sensors are
 replaced or a different wearer's flex range differs substantially.
 
@@ -109,7 +117,7 @@ replaced or a different wearer's flex range differs substantially.
   surfaced anywhere — this is the most common silent-failure point in
   this kind of pipeline.
 - **Field order matters for the TinyML model.** `flex_raw` is fixed as
-  thumb/index/middle/ring/pinky, followed by accel then gyro. Whatever
+  thumb/index/middle/ring/pinky/palm, followed by accel then gyro. Whatever
   order the training data collection script logs features in on the Pi
   side must match this exactly, or the model will train on a feature
   vector that doesn't correspond to what it receives at inference time.

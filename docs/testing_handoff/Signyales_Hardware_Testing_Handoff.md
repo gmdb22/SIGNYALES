@@ -503,19 +503,21 @@ diagram in the Hardware Assembly Guide before assuming it's a software
 problem.
 
 **Now calibrate it.** With the serial monitor still open, type `c` and
-press Enter. Flex and relax all 5 fingers repeatedly for 8 seconds. You'll
-see output like:
+press Enter. Flex and relax all 5 fingers and the palm repeatedly for 8
+seconds. You'll see output like:
 
 ```
-Finger 0: min=800 max=3200
-Finger 1: min=750 max=3100
+Sensor 0 (thumb): min=800 max=3200
+Sensor 1 (index): min=750 max=3100
 ...
+Sensor 5 (palm): min=900 max=2600
 ```
 
-**Report back:** the full min/max line for all 5 fingers. A healthy
+**Report back:** the full min/max lines for all 6 sensors. A healthy
 reading has a spread of at least several hundred between min and max. If
-any finger shows numbers very close together (e.g., `min=2040 max=2055`),
-note which finger — that sensor likely isn't wired correctly.
+any sensor shows numbers very close together (e.g., `min=2040 max=2055`),
+note which one — that sensor likely isn't wired correctly, or the glove
+still has the old 470 Ω resistors.
 
 ---
 

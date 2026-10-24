@@ -30,8 +30,8 @@ def pack_glove(glove_id, seq, ts, flex, accel, gyro, checksum=0):
 
 
 def build_test_frame():
-    left_flex = (100, 200, 300, 400, 500)
-    right_flex = (150, 250, 350, 450, 550)
+    left_flex = (100, 200, 300, 400, 500, 600)    # thumb..pinky, palm
+    right_flex = (150, 250, 350, 450, 550, 650)
     left_accel = (0.1, 0.2, 9.8)
     left_gyro = (1.0, 2.0, 3.0)
     right_accel = (0.0, 0.1, 9.7)

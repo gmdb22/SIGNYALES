@@ -14,16 +14,22 @@ import logging
 
 log = logging.getLogger("signyales.serial_link")
 
+# Flex sensors per glove, in packet order. Must equal FLEX_PER_GLOVE in
+# firmware packet.h (6 since October 2026: 5 fingers + 1 palm sensor).
+FLEX_PER_GLOVE = 6
+FLEX_NAMES = ("thumb", "index", "middle", "ring", "pinky", "palm")
+
 # Mirrors glove_packet_t exactly (packet.h):
-#   uint8_t  glove_id       -> B
-#   uint32_t seq            -> I
-#   uint32_t timestamp_ms   -> I
-#   uint16_t flex_raw[5]    -> 5H
-#   float    accel[3]       -> 3f
-#   float    gyro[3]        -> 3f
-#   uint8_t  checksum       -> B
-GLOVE_FMT = "<BII5H3f3fB"
-GLOVE_SIZE = struct.calcsize(GLOVE_FMT)
+#   uint8_t  glove_id                  -> B
+#   uint32_t seq                       -> I
+#   uint32_t timestamp_ms              -> I
+#   uint16_t flex_raw[FLEX_PER_GLOVE]  -> 6H
+#   float    accel[3]                  -> 3f
+#   float    gyro[3]                   -> 3f
+#   uint8_t  checksum                  -> B
+GLOVE_FMT = f"<BII{FLEX_PER_GLOVE}H3f3fB"
+GLOVE_SIZE = struct.calcsize(GLOVE_FMT)        # 46 bytes
+GLOVE_FIELDS = 3 + FLEX_PER_GLOVE + 3 + 3 + 1  # values struct.unpack gives per glove
 
 # Mirrors combined_frame_t exactly (frame.h):
 #   uint32_t frame_seq            -> I
@@ -34,20 +40,22 @@ GLOVE_SIZE = struct.calcsize(GLOVE_FMT)
 #   glove_packet_t right          -> GLOVE_FMT body
 #   uint8_t  checksum             -> B
 FRAME_FMT = "<IIBB" + GLOVE_FMT[1:] + GLOVE_FMT[1:] + "B"
-FRAME_SIZE = struct.calcsize(FRAME_FMT)
+FRAME_SIZE = struct.calcsize(FRAME_FMT)        # 103 bytes
 
 SYNC_BYTE_0 = 0xAA
 SYNC_BYTE_1 = 0x55
 
 
 def _unpack_glove(fields):
-    """fields is the 15-tuple slice belonging to one glove_packet_t."""
-    glove_id, seq, ts, f0, f1, f2, f3, f4, ax, ay, az, gx, gy, gz, checksum = fields
+    """fields is the GLOVE_FIELDS-tuple slice belonging to one glove_packet_t."""
+    glove_id, seq, ts = fields[0:3]
+    flex = tuple(fields[3:3 + FLEX_PER_GLOVE])
+    ax, ay, az, gx, gy, gz, checksum = fields[3 + FLEX_PER_GLOVE:]
     return {
         "glove_id": glove_id,
         "seq": seq,
         "timestamp_ms": ts,
-        "flex": (f0, f1, f2, f3, f4),
+        "flex": flex,
         "accel": (ax, ay, az),
         "gyro": (gx, gy, gz),
         "checksum": checksum,
@@ -76,10 +84,10 @@ def parse_frame(payload: bytes):
 
     values = struct.unpack(FRAME_FMT, payload)
     # values layout: frame_seq, frame_timestamp_ms, left_valid, right_valid,
-    #                <15 left fields>, <15 right fields>, checksum
+    #                <GLOVE_FIELDS left>, <GLOVE_FIELDS right>, checksum
     frame_seq, frame_ts, left_valid, right_valid = values[0:4]
-    left_fields = values[4:4 + 15]
-    right_fields = values[4 + 15:4 + 30]
+    left_fields = values[4:4 + GLOVE_FIELDS]
+    right_fields = values[4 + GLOVE_FIELDS:4 + 2 * GLOVE_FIELDS]
     checksum = values[-1]
 
     return {
@@ -172,7 +180,7 @@ class SimulatedFrameSource:
             "glove_id": glove_id,
             "seq": self._seq,
             "timestamp_ms": int(time.time() * 1000) & 0xFFFFFFFF,
-            "flex": tuple(random.randint(0, 4095) for _ in range(5)),
+            "flex": tuple(random.randint(0, 4095) for _ in range(FLEX_PER_GLOVE)),
             "accel": tuple(random.uniform(-2.0, 2.0) for _ in range(3)),
             "gyro": tuple(random.uniform(-50.0, 50.0) for _ in range(3)),
             "checksum": 0,

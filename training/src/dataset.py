@@ -6,7 +6,7 @@ Loads gesture windows recorded by pi-side/tools/collect_gesture.py.
 Expected layout:
     data/
       kumusta/
-        rep_0000.npz   (keys: "features" (window_size, 22), "label")
+        rep_0000.npz   (keys: "features" (window_size, 24), "label")
         rep_0001.npz
         ...
       salamat/

@@ -121,8 +121,8 @@ TensorFlow, which is large and not needed for them. A snapshot of what one full
 laptop install resolved to is in `pi-side/requirements-laptop-lock.txt`
 (reference only, not verified on the Pi).
 
-**Native firmware logic tests** (needs `g++`; checks `packet.h` is 44 bytes and
-`frame.h` is 99 bytes, and the checksums):
+**Native firmware logic tests** (needs `g++`; checks `packet.h` is 46 bytes and
+`frame.h` is 103 bytes, and the checksums):
 
 ```
 # bash, folder: firmware

@@ -5,8 +5,11 @@
   wirelessly and does not change the glove's saved calibration.
 
   At startup it prints the chip, why it last reset, and every device on
-  the I2C bus (the motion sensor). Then it prints the 7 flex readings
-  (F1-F7 from the glove PCB schematic) four times a second.
+  the I2C bus (the motion sensor). Then it prints the flex readings four
+  times a second: the 6 pins the glove firmware uses (5 fingers + palm),
+  then the schematic's original J5-J7 pins (IO25-IO27) for comparison.
+  Before the rework, the sensors on J5/J6 show up on IO25/IO26 and the
+  new pins IO36/IO39 read noise; after the rework both should match.
 
   Serial commands (115200 baud; type the letter and press Enter):
     s   summary: lowest, highest and spread of each sensor since the last 'r'
@@ -26,10 +29,13 @@
 
 struct FlexChannel { const char* name; int pin; };
 
-// F1-F7 as in the glove PCB schematic (connectors J1-J7).
+// The glove firmware's 6 pins (plug-in order J1 thumb ... J6 palm), then
+// the schematic's original pins for J5-J7, which are ADC2 and stop
+// working while Wi-Fi is on.
 const FlexChannel FLEX[] = {
-  {"F1", 34}, {"F2", 35}, {"F3", 32}, {"F4", 33},
-  {"F5", 25}, {"F6", 26}, {"F7", 27},
+  {"J1 thumb", 34}, {"J2 index", 35}, {"J3 middle", 32}, {"J4 ring", 33},
+  {"J5 pinky", 36}, {"J6 palm", 39},
+  {"old J5", 25}, {"old J6", 26}, {"old J7", 27},
 };
 const int N = sizeof(FLEX) / sizeof(FLEX[0]);
 
@@ -104,8 +110,8 @@ void setWifi(bool on) {
     WiFi.mode(WIFI_OFF);
   }
   wifiOn = on;
-  Serial.printf("--- Wi-Fi is now %s ---\n", on ? "ON: ADC2 pins (F5, F6, F7) should stop changing"
-                                                 : "OFF: all 7 pins can be read");
+  Serial.printf("--- Wi-Fi is now %s ---\n", on ? "ON: the old J5-J7 pins (ADC2) should stop changing"
+                                                 : "OFF: all pins can be read");
 }
 
 void printSummary() {
@@ -137,8 +143,8 @@ void setup() {
   resetRange();
   setWifi(false);
   scanI2c();
-  Serial.println("--- Flex readings, 0-4095 (Wi-Fi OFF). Bend one finger at a time to see "
-                 "which F it is. Commands: s r w i p ---");
+  Serial.println("--- Flex readings, 0-4095 (Wi-Fi OFF). Bend one finger at a time to check "
+                 "each J is the right finger. Commands: s r w i p ---");
 }
 
 void loop() {

@@ -11,10 +11,11 @@ import numpy as np
 
 def extract_features(frame: dict) -> np.ndarray:
     """
-    Flattens one parsed frame into the 22-value feature vector the
+    Flattens one parsed frame into the 24-value feature vector the
     model expects, in this exact order:
-      left_flex(5), right_flex(5), left_accel(3), left_gyro(3),
+      left_flex(6), right_flex(6), left_accel(3), left_gyro(3),
       right_accel(3), right_gyro(3)
+    Flex order per glove: thumb, index, middle, ring, pinky, palm.
 
     Flex values are scaled to 0-1 (they arrive already calibrated to
     0-4095 by the glove firmware). Accel/gyro are left in their

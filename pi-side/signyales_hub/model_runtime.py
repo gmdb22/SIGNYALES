@@ -21,7 +21,7 @@ training pipeline — see Jupyter Notebook training scripts):
     labels.json    - JSON list of gesture label strings, index-aligned
                      to the model's output classes, e.g. ["kumusta",
                      "salamat", "oo", "hindi", ...]
-    scaler.json    - {"mean": [22 floats], "std": [22 floats]}, computed
+    scaler.json    - {"mean": [24 floats], "std": [24 floats]}, computed
                      on the SAME training data the model was fit on.
                      Must use the exact feature order in config.py.
 """

@@ -48,7 +48,7 @@ def software_tasks():
     py = pi_side_python()
     return [
         Task("roundtrip", "Frame format round-trip",
-             "Python and firmware agree on the 99-byte frame format.",
+             "Python and firmware agree on the 103-byte frame format (6 flex per glove).",
              [py, "tests/test_frame_roundtrip.py"], PI_SIDE),
         Task("units", "Pi-side unit tests",
              "Feature order, windowing, debouncer, rest label, subtitle and speech plumbing.",

@@ -37,9 +37,11 @@ int main(void) {
     // ever changes (e.g. someone removes #pragma pack), this struct's
     // size would silently grow, and EVERY downstream layer (receiver,
     // Python parser) would start misreading every field after the first
-    // one affected. Expected size: 1+4+4+(2*5)+(4*3)+(4*3)+1 = 44 bytes.
-    CHECK("glove_packet_t is exactly 44 bytes (no padding)",
-          sizeof(glove_packet_t) == 44);
+    // one affected. Expected size: 1+4+4+(2*6)+(4*3)+(4*3)+1 = 46 bytes
+    // (6 flex sensors per glove: 5 fingers + 1 palm).
+    CHECK("FLEX_PER_GLOVE is 6", FLEX_PER_GLOVE == 6);
+    CHECK("glove_packet_t is exactly 46 bytes (no padding)",
+          sizeof(glove_packet_t) == 46);
 
     // --- Checksum correctness ---
     glove_packet_t pkt;
@@ -48,7 +50,7 @@ int main(void) {
     pkt.seq = 12345;
     pkt.timestamp_ms = 987654;
     pkt.flex_raw[0] = 100; pkt.flex_raw[1] = 200; pkt.flex_raw[2] = 300;
-    pkt.flex_raw[3] = 400; pkt.flex_raw[4] = 500;
+    pkt.flex_raw[3] = 400; pkt.flex_raw[4] = 500; pkt.flex_raw[5] = 600;
     pkt.accel[0] = 0.1f; pkt.accel[1] = 0.2f; pkt.accel[2] = 9.8f;
     pkt.gyro[0] = 1.0f; pkt.gyro[1] = 2.0f; pkt.gyro[2] = 3.0f;
 

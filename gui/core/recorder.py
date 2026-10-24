@@ -2,7 +2,7 @@
 Signyales GUI — record gesture repetitions with Start/Stop buttons.
 
 Saves files in exactly the format pi-side/tools/collect_gesture.py writes
-(<out>/<label>/rep_NNNN.npz with "features" (window, 22) and "label"), and
+(<out>/<label>/rep_NNNN.npz with "features" (window, 24) and "label"), and
 uses that tool's own resample_to_fixed_length, so the training pipeline
 can't tell the two apart.
 

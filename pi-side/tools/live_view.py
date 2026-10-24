@@ -30,7 +30,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from signyales_hub.config import HubConfig  # noqa: E402
-from signyales_hub.serial_link import SerialFrameReader, SimulatedFrameSource  # noqa: E402
+from signyales_hub.serial_link import (  # noqa: E402
+    FLEX_NAMES, FLEX_PER_GLOVE, SerialFrameReader, SimulatedFrameSource)
 
 LOSS_AFTER_S = 2.0  # a hand with no fresh data for this long counts as "lost"
 FLEX_SPREAD_WARN = 200  # counts (0-4095 scale). Heuristic, not from the proposal.
@@ -42,8 +43,8 @@ class HandStats:
         self.valid = 0
         self.last_seq = None
         self.seq_gaps = 0
-        self.flex_min = [None] * 5
-        self.flex_max = [None] * 5
+        self.flex_min = [None] * FLEX_PER_GLOVE
+        self.flex_max = [None] * FLEX_PER_GLOVE
 
     def update(self, hand_dict, valid):
         if valid:
@@ -205,12 +206,12 @@ def main():
         still = " (STILL LOST at end of run)" if ev["lost"] else ""
         print(f"{name}: fresh in {100.0 * h.valid / n:5.1f}% of frames | glove seq gaps seen: {h.seq_gaps}"
               f" | outages >{LOSS_AFTER_S:.0f}s: {ev['episodes']} (longest {ev['longest']:.1f}s){still}")
-        for i in range(5):
+        for i in range(FLEX_PER_GLOVE):
             spread = h.flex_max[i] - h.flex_min[i]
             flag = "  <-- small spread (flex didn't move, or sensor not responding?)" if spread < FLEX_SPREAD_WARN else ""
-            print(f"   finger {i}: min={h.flex_min[i]:4d} max={h.flex_max[i]:4d} spread={spread:4d}{flag}")
+            print(f"   {FLEX_NAMES[i]:>6}: min={h.flex_min[i]:4d} max={h.flex_max[i]:4d} spread={spread:4d}{flag}")
     print(f"(Spread warning threshold = {FLEX_SPREAD_WARN} counts is a heuristic chosen for this tool, "
-          f"and only meaningful if you flexed all fingers during the run.)")
+          f"and only meaningful if you flexed all fingers and the palm during the run.)")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,8 @@
 /*
   Signyales — Glove Node Firmware (original ESP32)
   ============================================
-  Layer 1 of the Signyales pipeline. Reads 5 flex sensors and a 6-axis
+  Layer 1 of the Signyales pipeline. Reads 6 flex sensors (5 fingers +
+  1 palm) and a 6-axis
   IMU, filters and calibrates the readings, packs them into a
   glove_packet_t (see packet.h), and transmits over ESP-NOW to the
   receiver dongle at SAMPLE_RATE_HZ.
@@ -34,8 +35,15 @@
 Adafruit_MPU6050 mpu;
 Preferences prefs;
 
+static_assert(FLEX_SENSOR_COUNT == FLEX_PER_GLOVE,
+              "config.h FLEX_SENSOR_COUNT must match packet.h FLEX_PER_GLOVE");
+
 const int flexPins[FLEX_SENSOR_COUNT] = {
-  FLEX_PIN_THUMB, FLEX_PIN_INDEX, FLEX_PIN_MIDDLE, FLEX_PIN_RING, FLEX_PIN_PINKY
+  FLEX_PIN_THUMB, FLEX_PIN_INDEX, FLEX_PIN_MIDDLE, FLEX_PIN_RING, FLEX_PIN_PINKY,
+  FLEX_PIN_PALM
+};
+const char* const flexNames[FLEX_SENSOR_COUNT] = {
+  "thumb", "index", "middle", "ring", "pinky", "palm"
 };
 
 // Per-finger calibration bounds, persisted in flash (NVS) so they
@@ -85,7 +93,7 @@ void saveCalibration() {
 // can map raw ADC counts to a consistent 0-4095 scale regardless of
 // sensor-to-sensor manufacturing variance.
 void runCalibrationRoutine() {
-  Serial.println("=== Calibration: flex and relax ALL fingers repeatedly for 8 seconds ===");
+  Serial.println("=== Calibration: flex and relax ALL fingers and the palm repeatedly for 8 seconds ===");
   for (int i = 0; i < FLEX_SENSOR_COUNT; i++) {
     flexMin[i] = 4095;
     flexMax[i] = 0;
@@ -102,7 +110,7 @@ void runCalibrationRoutine() {
   saveCalibration();
   Serial.println("Calibration saved:");
   for (int i = 0; i < FLEX_SENSOR_COUNT; i++) {
-    Serial.printf("  Finger %d: min=%u max=%u\n", i, flexMin[i], flexMax[i]);
+    Serial.printf("  Sensor %d (%s): min=%u max=%u\n", i, flexNames[i], flexMin[i], flexMax[i]);
   }
 }
 
