@@ -52,6 +52,10 @@ One app for the laptop and the Pi, with two modes:
   the Pi recognizes) and a *Hardware helper* (compile/upload firmware,
   serial monitor, RECEIVER_MAC check).
 
+**Plug and play:** `gui/signyales_gui.py --kiosk` opens full screen, straight to
+recognition, and retries by itself; `pi-side/deploy/install_kiosk_autostart.sh`
+makes the Pi start it when it turns on. Text fits any screen size.
+
 Details, setup and the mirror link: `gui/README.md`. The GUI subtitles and
 the laptop mirror are a scope change from the proposal's console-only output
 (approved by the adviser, as reported by the team in October 2026); the

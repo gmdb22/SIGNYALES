@@ -26,6 +26,42 @@ pi-side/venv/bin/python gui/signyales_gui.py
 Every button runs the same command the guides use; the full command and its
 output appear in the log, so a result can always be repeated by hand.
 
+Text is scaled to fit the screen: on a screen smaller than the 1180 x 780
+design size (e.g. an 800 x 480 or 1024 x 600 LCD) everything shrinks to fit
+and the window starts maximized. `--scale 0.8` (0.6 to 2.0) sets it by hand.
+All start options: `--help`.
+
+## Plug and play (kiosk mode)
+
+```bash
+pi-side/venv/bin/python gui/signyales_gui.py --kiosk          # Pi
+pi-side\venv\Scripts\python.exe gui\signyales_gui.py --kiosk --simulate --windowed   # try it on the laptop
+```
+
+Full screen, straight to recognition: big subtitles that fit any screen,
+speech, and one line at the top saying what (if anything) is wrong, with a
+light per glove. It needs no clicking and keeps retrying by itself, so the
+Pi, receiver and gloves can be switched on in any order:
+
+| Message | Meaning |
+|---|---|
+| Can't read the receiver on /dev/ttyAMA0 … Trying again every 5 s | The serial port can't be opened; the message says why (port off, permission, port in use) |
+| Waiting for the receiver … no data yet | The port opens but nothing arrives: receiver off or not wired |
+| Receiver connected. Waiting for the gloves | Frames arrive but no glove is heard |
+| The left/right glove isn't heard | One glove off or out of range |
+| No trained model yet | No `model.tflite` in the model folder: glove lights still work |
+| The model … didn't load | Model files don't match this version, or TensorFlow is missing |
+| Ready. Sign a word. | Running; "Signyales ready" is spoken once |
+
+Text is enlarged on big screens (up to 2x on a TV). Keys: **Esc** full
+screen on/off, **F2** (or the Full app button) opens the normal app,
+**Ctrl+Q** quits. Only one kiosk can run at a time (a lock in
+`~/.signyales_kiosk.lock`). Options: `--port`, `--model-dir`, `--no-speech`,
+`--share` (also send words to a laptop's Mirror), `--simulate`, `--windowed`.
+
+To start it automatically when the Pi turns on, see
+`pi-side/deploy/README.md` ("Plug and play: kiosk at startup").
+
 ## Mirror: Pi recognizes, laptop shows and speaks
 
 1. Connect the laptop and the Pi with an Ethernet cable, or put both on the
@@ -76,12 +112,13 @@ port continuously, so a repetition never starts with stale frames (F2).
 
 | File | What it is |
 |---|---|
-| `signyales_gui.py` | The app window, machine and mode switch |
+| `signyales_gui.py` | The app window, machine and mode switch, start options, kiosk start |
+| `kiosk_view.py` | Kiosk (plug-and-play) screen |
 | `testing_view.py` | Testing mode |
 | `active_view.py` | Active mode (Pi: Recognize, Record; laptop: Mirror, Hardware helper) |
 | `widgets.py` | Log box, subtitle panel (and fullscreen), glove status, speaker |
 | `core/speech_worker.py` | Speaks for the GUI in a separate process (Windows' speech was silent from a GUI background thread) |
-| `core/` | Logic without any window code: tasks, process runner, live pipeline, recorder, mirror link, serial helpers |
+| `core/` | Logic without any window code: tasks, process runner, live pipeline, recorder, mirror link, serial helpers, screen scaling and start options (`display.py`) |
 | `tests/test_gui_core.py` | Tests for `core/` (runs in CI) |
 
 `core/live.py` repeats the steps of `pi-side/signyales_hub/main.py`. If the

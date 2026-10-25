@@ -236,6 +236,39 @@ finally:
     worker.wait(timeout=10)
 check("speech helper: exits when the GUI closes its input", worker.returncode == 0, worker.returncode)
 
+# ---------------------------------------------------------------- screen size, options, kiosk lock
+from core import display  # noqa: E402
+check("display: design size on a 1180x780 screen = scale 1.0",
+      display.ui_scale(1180, 780, allow_grow=False) == 1.0)
+check("display: 800x480 LCD shrinks the text (about 0.62)",
+      0.6 <= display.ui_scale(800, 480, allow_grow=False) < 0.65, display.ui_scale(800, 480, False))
+check("display: full app never grows on a big screen; kiosk does (capped at 2.0)",
+      display.ui_scale(1920, 1080, allow_grow=False) == 1.0
+      and 1.3 < display.ui_scale(1920, 1080, allow_grow=True) <= 2.0
+      and display.ui_scale(3840, 2160, allow_grow=True) == 2.0)
+check("display: --scale override is used, within limits",
+      display.ui_scale(800, 480, False, override=1.5) == 1.5 and display.ui_scale(800, 480, False, override=9) == 2.0)
+w, h, mx = display.window_size(800, 480)
+check("display: window fits a small screen and is maximized there", (w, h, mx) == (800, 440, True), (w, h, mx))
+check("display: normal laptop screen keeps the 1180x780 window",
+      display.window_size(1920, 1080) == (1180, 780, False), display.window_size(1920, 1080))
+o = display.parse_args(["--kiosk", "--simulate", "--port", "COM7", "--no-speech"])
+check("options: --kiosk --simulate --port --no-speech parsed",
+      o.kiosk and o.simulate and o.port == "COM7" and o.no_speech and not o.share and o.model_dir is None)
+check("options: no options = normal window", not display.parse_args([]).kiosk)
+with tempfile.TemporaryDirectory() as tmp:
+    a, b = display.SingleInstance(Path(tmp) / "k.lock"), display.SingleInstance(Path(tmp) / "k.lock")
+    first, second = a.acquire(), b.acquire()
+    a.release()
+    third = b.acquire()
+    b.release()
+    check("kiosk lock: a second copy is refused, and allowed once the first closes",
+          first and not second and third, (first, second, third))
+check("kiosk errors: missing port, permission and busy port get plain advice",
+      "doesn't exist" in display.friendly_error("Could not start: [Errno 2] No such file or directory", "/dev/ttyAMA0")
+      and "dialout" in display.friendly_error("[Errno 13] Permission denied: '/dev/ttyAMA0'", "/dev/ttyAMA0")
+      and "systemctl stop signyales" in display.friendly_error("Device or resource busy", "/dev/ttyAMA0"))
+
 # ---------------------------------------------------------------- hardware helpers
 check("mac: parsed from the MAC utility's line",
       hardware.parse_mac("MAC Address: 24:6f:28:ab:cd:ef") == "24:6F:28:AB:CD:EF")

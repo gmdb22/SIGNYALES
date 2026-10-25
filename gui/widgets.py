@@ -77,12 +77,14 @@ class SubtitlePanel(tk.Frame):
         self._mirrors = []
 
     def _fit(self):
+        # Sizes in pixels (negative font size), so the word fits the panel
+        # whatever Tk's point scaling is (the GUI scales text to the screen).
         w, h = max(self.winfo_width(), 50), max(self.winfo_height(), 50)
-        size = min(self.max_size, int(h * 0.55))
-        self._font.configure(size=size)
-        while size > 10 and self._font.measure(self._text) > w * 0.9:
-            size -= 4
-            self._font.configure(size=size)
+        px = min(int(self.max_size * 4 / 3), int(h * 0.73))
+        self._font.configure(size=-px)
+        while px > 12 and self._font.measure(self._text) > w * 0.9:
+            px -= 5
+            self._font.configure(size=-px)
         dim = self._text == self.idle_text
         self.label.configure(text=self._text, fg="#8a96a3" if dim else PANEL_FG)
 
