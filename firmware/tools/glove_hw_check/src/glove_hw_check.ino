@@ -19,7 +19,8 @@
     i   scan the I2C bus again
     p   pause or resume the readings
 
-  Pins are from the KiCad schematic of the glove PCB (22 Oct 2026).
+  Pins are from the KiCad schematic of the glove PCB (22 Oct 2026), except
+  the motion sensor, which moves to IO21/IO22 in the rework (27 Oct 2026).
 */
 
 #include <Arduino.h>
@@ -39,9 +40,11 @@ const FlexChannel FLEX[] = {
 };
 const int N = sizeof(FLEX) / sizeof(FLEX[0]);
 
-// I2C pin pairs to scan: the schematic's pins, then the ESP32's usual
-// I2C pins in case the IMU was wired there instead.
-const int I2C_PAIRS[][2] = { {12, 14}, {21, 22} };
+// I2C pin pairs to scan: the glove firmware's pins (IO21/IO22, after the
+// rework), then the schematic's old pins (IO12/IO14) to show whether the
+// sensor is still wired there. If it is, the board may not start at all
+// (IO12 is a boot strapping pin).
+const int I2C_PAIRS[][2] = { {21, 22}, {12, 14} };
 
 uint16_t lo[N], hi[N];
 bool wifiOn = false;

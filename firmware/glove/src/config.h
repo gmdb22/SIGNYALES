@@ -53,17 +53,17 @@
 
 // ---------------------------------------------------------------
 // IMU (I2C): MPU6050 board ("ITG/MPU", GY-521 type).
-// From the glove PCB schematic: SDA = IO12, SCL = IO14.
-//
-// IO12 WARNING: IO12 is a boot strapping pin on the original ESP32. If
-// it is high at power-on (the IMU board's pull-up resistors do that),
-// the ESP32 sets its flash to 1.8 V and a 3.3 V-flash module such as
-// the WROOM-32E may not start (reset loop or "flash read err"). If that
-// happens, move SDA/SCL to the ESP32's usual I2C pins, IO21 and IO22,
-// and change these two lines to 21 and 22.
+// SDA = IO21, SCL = IO22 (the ESP32's usual I2C pins), per the rework
+// decided on 27 Oct 2026. The PCB schematic had SDA = IO12, SCL = IO14.
+// IO12 is a boot strapping pin on the original ESP32: the IMU board's
+// pull-up resistors hold it high at power-on, the ESP32 then sets its
+// flash to 1.8 V and the 3.3 V flash fails to start (the right glove's
+// boot loop on 27 Oct: "Probe failed", boot:0x33). IO12 must stay
+// unconnected. Only flash this after the gloves are rewired: with the
+// IMU still on IO12/IO14 the firmware stops at "MPU6050 not found".
 // ---------------------------------------------------------------
-#define IMU_SDA_PIN   12
-#define IMU_SCL_PIN   14
+#define IMU_SDA_PIN   21
+#define IMU_SCL_PIN   22
 #define IMU_I2C_ADDR  0x68   // MPU6050 default (0x69 if AD0 is pulled high)
 
 // ---------------------------------------------------------------

@@ -29,7 +29,8 @@ actually built (October 2026) use different parts, so these are now:
   the planned rework: thumb IO34, index IO35, middle IO32, ring IO33,
   pinky IO36 (jumper from J5), palm IO39 (jumper from J6).
 - **IMU:** MPU6050 board marked "ITG/MPU" (GY-521 type) over I2C,
-  SDA = IO12, SCL = IO14 (from the schematic).
+  SDA = IO21, SCL = IO22 after the rework (the schematic has IO12/IO14;
+  see the IO12 note below).
 
 **Planned rework of each glove PCB (not done yet):**
 
@@ -42,13 +43,12 @@ actually built (October 2026) use different parts, so these are now:
   leaves IO25–IO27 as plain inputs. The ESP32 board has only 6 pins that
   work while transmitting (IO32–IO36, IO39), which is why there are 6
   sensors.
-- IO12 (the IMU's SDA) is a boot strapping pin and can stop the board from
-  starting. On 27 Oct 2026 the right glove went into a boot loop
+- Move the IMU's **SDA to IO21 and SCL to IO22**; leave IO12 unconnected.
+  IO12 is a boot strapping pin and can stop the board from starting. On
+  27 Oct 2026 the right glove went into a boot loop
   (`spi_flash ... Probe failed`, `boot:0x33`), most likely for this reason
-  (reasoned, not yet confirmed). Decided: move the IMU to **SDA IO21, SCL
-  IO22** on both gloves and leave IO12 unconnected. The matching firmware
-  change (`IMU_SDA_PIN`/`IMU_SCL_PIN` in `config.h`) is a separate patch,
-  applied once the assembler confirms the rewiring.
+  (reasoned, not yet confirmed). `config.h` already uses 21/22, so with the
+  IMU still on IO12/IO14 the firmware stops at `MPU6050 not found`.
 
 Before the rework, the pinky and palm slots read unconnected pins (noise).
 
@@ -61,9 +61,9 @@ changing it also means changing the Pi side and retraining.
 `firmware/tools/glove_hw_check` is a temporary test program for one
 glove. It sends nothing wirelessly and doesn't touch the saved
 calibration. It prints the chip and why it last reset, scans for the
-motion sensor on IO12/IO14 and on IO21/IO22 (and reports its WHO_AM_I
-value), then shows the flex readings four times a second: the 6 pins the
-glove firmware uses (J1 thumb … J6 palm) and, for comparison, the
+motion sensor on IO21/IO22 and, to catch old wiring, on IO12/IO14 (and
+reports its WHO_AM_I value), then shows the flex readings four times a
+second: the 6 pins the glove firmware uses (J1 thumb … J6 palm) and, for comparison, the
 schematic's original J5–J7 pins (IO25–IO27).
 
 ```
