@@ -42,10 +42,13 @@ actually built (October 2026) use different parts, so these are now:
   leaves IO25–IO27 as plain inputs. The ESP32 board has only 6 pins that
   work while transmitting (IO32–IO36, IO39), which is why there are 6
   sensors.
-- IO12 (the IMU's SDA) is a boot strapping pin and could stop the board
-  from starting. The assembler reports that the board starts normally, so
-  no change is planned; if it ever doesn't start, move SDA/SCL to IO21/IO22
-  and change `IMU_SDA_PIN`/`IMU_SCL_PIN`.
+- IO12 (the IMU's SDA) is a boot strapping pin and can stop the board from
+  starting. On 27 Oct 2026 the right glove went into a boot loop
+  (`spi_flash ... Probe failed`, `boot:0x33`), most likely for this reason
+  (reasoned, not yet confirmed). Decided: move the IMU to **SDA IO21, SCL
+  IO22** on both gloves and leave IO12 unconnected. The matching firmware
+  change (`IMU_SDA_PIN`/`IMU_SCL_PIN` in `config.h`) is a separate patch,
+  applied once the assembler confirms the rewiring.
 
 Before the rework, the pinky and palm slots read unconnected pins (noise).
 

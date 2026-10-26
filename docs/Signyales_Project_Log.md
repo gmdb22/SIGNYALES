@@ -66,3 +66,50 @@ oct. 16, 2026 - FAH
 - Not run anywhere yet: the Pi, real gloves and receiver, firmware upload, the GUI on a Pi,
   the mirror over a real network, and console app speech on Windows.
 - Open: decisions D1–D5 and latency, word list with Ma'am Joanne, consent forms, F1–F5 and F16.
+
+## 2026-10-22 to 2026-10-25
+
+- The gloves as built differ from the design: original ESP32 (ESP32-DevKitC-32E clone,
+  CP210x) instead of the ESP32-S3, MPU6050 board ("ITG/MPU"), 7 flex sensors fitted with
+  470 Ω divider resistors instead of 47 kΩ. Decided: 6 flex sensors per glove (5 fingers +
+  palm), because only 6 ADC1 pins can be read while ESP-NOW transmits. The adviser confirmed
+  the changes (6 sensors, original ESP32, Pi 5, GUI + mirror).
+- Commits on `code-tasks`: `2ed8bc8` handoff guide Parts A–C; `44d76f7` glove firmware for
+  the original ESP32 and the schematic pins, plus `firmware/tools/glove_hw_check`; `120bc04`
+  6 flex sensors (packet 46 B, frame 103 B, 24 features); `be7fa90` kiosk mode and Pi
+  autostart.
+- Rework plan agreed with the hardware assembler: R1–R6 → 47 kΩ, J5 → IO36, J6 → IO39, J7 unused.
+
+## 2026-10-26 to 2026-10-27 (first session with real hardware)
+
+Commit `be7fa90`. Results from the terminal output seen during the session.
+
+- Raspberry Pi 5 (Raspberry Pi OS 64-bit, Debian 13, Python 3.13.5): `setup_pi.sh` finished on
+  the third run. Run 1 stopped when the Pi lost Wi-Fi during the TensorFlow download. Run 2
+  failed building `lgpio` (`swig` missing), fixed by hand with
+  `sudo apt install -y swig liblgpio-dev` (`setup_pi.sh` does not install these yet). Run 3:
+  full install OK (TensorFlow 2.21.0) and `dtparam=uart0=on` added.
+- On the Pi, fake data only: frame round-trip, Pi-side unit tests and GUI core tests passed;
+  `live_view.py --simulate` ran at about 49.4 Hz with both hands and 6 sensors;
+  `signyales_hub.main --simulate --no-tts` ran (no model, as expected); `output_check.py`
+  subtitles seen and speech heard. Serial port enabled in raspi-config (login shell off,
+  hardware on). SSH from the laptop works by IP (password login; `pi5.local` is unreliable
+  from Windows). The laptop hotspot gave the Pi no IP address (unresolved).
+- Receiver (ESP32-WROOM-32, CH340): uploaded from the GUI Hardware helper, boots, prints its
+  MAC and `[stats]` every second, 0% from both gloves (none were on). Not wired to the Pi yet.
+- Right glove: firmware upload OK, but the board boot-loops (`spi_flash ... Probe failed`,
+  `boot:0x33`). Reasoned cause, not yet confirmed: the IMU's SDA is on IO12, a boot strapping
+  pin; the IMU board's pull-up holds it high at power-on, so the ESP32 sets its flash to 1.8 V.
+  The receiver boots with `boot:0x13`; the difference is the GPIO12 bit. Decided: move the IMU
+  to SDA IO21 / SCL IO22 on both gloves and leave IO12 unconnected. The eFuse alternative
+  (irreversible) was not used.
+- Left glove: Windows reports "Device Descriptor Request Failed", and the area around the
+  ESP32's USB port gets very hot on USB power alone (battery unplugged). Reasoned: a short or
+  overcurrent. Not to be powered until checked.
+- Both gloves handed back to the hardware assembler with a written handoff (short checks,
+  IO12 explanation, rework list, pin map).
+- Not run yet: the IO12 confirm test (IMU unplugged), glove hardware check, calibration, Pi
+  UART loopback, receiver wired to the Pi, real glove data on the Pi, kiosk mode and autostart
+  on the Pi.
+- Open: the assembler's rework and left-glove result; D1–D5 and latency; power plan (LCD,
+  session length, power bank); word list and consent forms; palm sensor orientation.
