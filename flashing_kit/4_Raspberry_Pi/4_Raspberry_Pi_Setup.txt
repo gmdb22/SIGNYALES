@@ -1,0 +1,150 @@
+4. RASPBERRY PI 5
+Needs: microSD card (32 GB+), card reader, the laptop (for step 4.1 only),
+monitor + micro-HDMI cable, keyboard, mouse, internet, the 27 W power
+supply, the active cooler fitted, sound: a USB-A to 3.5 mm sound card, an
+AUX cable and a speaker with an AUX input (the Pi 5 has no headphone jack).
+
+Files:
+    4_Raspberry_Pi_Setup.txt     these instructions
+    pi-side/deploy/setup_pi.sh   (in the repository) does steps A3-A6 of the
+                                 handoff guide in one go
+
+What you download (not included in this kit, because it's several GB and
+comes from Raspberry Pi directly):
+    Raspberry Pi Imager   https://www.raspberrypi.com/software/
+    Raspberry Pi OS       chosen and downloaded inside the Imager
+
+
+4.1 PUT RASPBERRY PI OS ON THE CARD (on the laptop)
+  1. Install and open Raspberry Pi Imager. Put the microSD card in the laptop.
+  2. Device: Raspberry Pi 5. Operating system: Raspberry Pi OS (64-bit), the
+     recommended one with the desktop. Storage: your microSD card
+     (double-check: everything on it is erased).
+  3. When it offers to customise settings, set:
+       hostname  signyales
+       a username and password (write them down)
+       Wi-Fi name, password and country (skip if using Ethernet)
+       time zone and keyboard layout
+       optional: enable SSH with password login
+  4. Write, wait for it to finish verifying, take the card out.
+
+
+4.2 FIRST START
+  1. Card into the Pi. Connect the monitor (HDMI port next to the USB-C power
+     port), keyboard, mouse, the USB sound card with the speaker on its AUX
+     cable (and Ethernet if used). Plug in the 27 W supply last.
+  2. Wait (it may restart once). Log in. Open a terminal (top bar icon, or
+     Ctrl+Alt+T).
+To turn the Pi off: sudo shutdown now, wait for the green light to stop
+flashing, then unplug.
+
+
+4.3 RUN THE SETUP SCRIPT
+Get setup_pi.sh onto the Pi. Easiest, in the Pi's terminal (needs internet):
+    curl -fsSL https://raw.githubusercontent.com/gmdb22/SIGNYALES/code-tasks/pi-side/deploy/setup_pi.sh -o ~/setup_pi.sh
+Or copy it from the laptop: SIGNYALES\pi-side\deploy\setup_pi.sh onto a USB
+stick, plug the stick into the Pi, and copy the file to the home folder with
+the file manager. Don't open or save the script in Windows Notepad first:
+that can add Windows line endings. If the Pi ever says
+"$'\r': command not found", fix the file with:
+    sed -i 's/\r$//' setup_pi.sh
+
+Then, in the Pi's terminal:
+    cd ~
+    bash setup_pi.sh
+It asks for your password, then runs for a while (TensorFlow alone can take
+10+ minutes). At the end it prints the versions and "DONE".
+Then:
+    sudo reboot
+
+If it stops with "STOPPED", send ~/signyales_setup_log.txt to Claude.
+If it says TensorFlow failed and it used the smaller list, that's fine for
+now: everything works except loading a trained model.
+
+
+4.4 SOFTWARE CHECKS ON THE PI (no gloves needed)
+After the reboot, open a terminal:
+    cd ~/SIGNYALES/pi-side
+    source venv/bin/activate
+    python tests/test_frame_roundtrip.py
+    python tests/test_hub_units.py
+    python ../gui/tests/test_gui_core.py
+    python tools/live_view.py --simulate --duration 3
+    python -m signyales_hub.main --simulate --no-tts -v
+Pass: "PASS: frame format round-trips...", "All Pi-side unit checks passed",
+"All GUI core checks passed", a summary listing thumb ... palm for each hand,
+and the last one keeps running ("Running in --simulate mode"); stop it with
+Ctrl+C after about 10 seconds.
+
+Speaker and subtitle check. First check the Pi sees the sound card:
+    aplay -l
+It should list a card named like "USB Audio". Right-click the speaker icon in
+the top bar and pick the USB device as the output. Then:
+    python tools/output_check.py
+You should see "salamat" in large letters and hear "Signyales speaker test.
+Salamat. Kumusta." No sound? Right-click the speaker icon in the top bar and
+pick your speaker, check the volume, then:
+    python tools/output_check.py --no-subtitle
+
+Optional, the app (on the Pi's own desktop, not over SSH):
+    cd ~/SIGNYALES
+    pi-side/venv/bin/python gui/signyales_gui.py
+
+
+4.5 SERIAL PORT LOOPBACK TEST (UART OPTION ONLY; skip with the USB cable)
+  1. In the terminal:
+       sudo raspi-config
+     Interface Options -> Serial Port -> "No" to login shell over serial,
+     "Yes" to serial port hardware -> Finish. Reboot if it asks.
+  2. With the Pi off, put one jumper wire between pin 8 (GPIO14) and
+     pin 10 (GPIO15). Turn the Pi on.
+  3. In the terminal:
+       cd ~/SIGNYALES/pi-side
+       source venv/bin/activate
+       python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
+     Expected: b'hello'. Then turn the Pi off and remove the jumper.
+  If it prints b'' or an error: send the output of
+       ls -l /dev/serial* /dev/ttyAMA*
+  to Claude before trying anything else.
+
+
+4.6 CONNECT THE RECEIVER
+Default, USB cable: plug the receiver into a Pi USB port with its USB-A to
+USB-C data cable. That's all: power and data, found automatically.
+Option, UART wires (Pi off):
+  Receiver D17 (TX)  -> Pi pin 10 (GPIO15, RX)
+  Receiver D18 (RX)  -> Pi pin 8  (GPIO14, TX)
+  Receiver GND       -> Pi pin 6  (GND)
+  Power the receiver from its USB-C (a USB port on the Pi works), and in
+  the app choose Active -> Receiver link -> "UART wires" (saved).
+Then, with both gloves on and powered:
+    cd ~/SIGNYALES/pi-side
+    source venv/bin/activate
+    python tools/live_view.py --duration 30
+(add --link uart to force the wires). It should show both hands' values,
+a "receiver: ..." line (USB) and a summary. "No receiver found on USB" =
+not plugged in or a charge-only cable. "No frames for ...s" on UART =
+check the wiring is crossed (TX to RX).
+Only one program can use the receiver at a time (close the kiosk first:
+pkill -f signyales_gui.py).
+
+
+4.7 PLUG AND PLAY: START SIGNYALES WHEN THE PI TURNS ON
+(Needs the kiosk update: code-tasks with "GUI: plug-and-play kiosk mode" or
+newer. Update first with:  cd ~/SIGNYALES && git pull)
+  1. Try it once by hand, on the Pi's desktop:
+       cd ~/SIGNYALES
+       pi-side/venv/bin/python gui/signyales_gui.py --kiosk
+     Full screen: big subtitles, a light per glove, and one line saying what
+     is missing (receiver, gloves, model) or "Ready". Ctrl+Q quits.
+  2. Make it start by itself:
+       bash ~/SIGNYALES/pi-side/deploy/install_kiosk_autostart.sh
+  3. Once, in:  sudo raspi-config
+       System Options -> Boot / Auto Login -> Desktop Autologin
+       Display Options -> Screen Blanking -> No
+  4. sudo reboot. The Pi should open Signyales full screen by itself.
+In the kiosk: Esc = full screen on/off, F2 = full app, F3 = link numbers
+(frames/s, received %, lost, damaged), Ctrl+Q = quit.
+Switch off safely: press the Pi 5's power button once.
+Log: ~/signyales_kiosk.log. Undo:
+       bash ~/SIGNYALES/pi-side/deploy/uninstall_kiosk_autostart.sh

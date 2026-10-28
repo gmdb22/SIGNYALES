@@ -1,0 +1,82 @@
+1. LAPTOP SETUP (Windows)
+Do this once. Skip any step that is already done on your laptop.
+All commands: PowerShell (or the VS Code terminal, which is PowerShell).
+
+
+1.1 INSTALL THE PROGRAMS
+Either with commands (winget is built into Windows 10 and 11):
+    winget install -e --id Git.Git
+    winget install -e --id Python.Python.3.13
+    winget install -e --id Microsoft.VisualStudioCode
+
+Or from the websites (default options are fine):
+    Git for Windows   https://git-scm.com/download/win
+    Python 3.13       https://www.python.org/downloads/windows/
+                      (64-bit; tick "Add python.exe to PATH")
+    VS Code           https://code.visualstudio.com/
+
+Use Python 3.13, not a newer one: TensorFlow may not support the newest
+Python yet. Then restart the laptop and check:
+    git --version
+    py -3.13 --version
+    code --version
+Each prints a version number.
+
+
+1.2 USB DRIVERS (so the boards show up as COM ports)
+  - Glove boards (ESP32-DevKitC-32E clone) use a Silicon Labs CP210x chip.
+    Windows usually installs it by itself. If no COM port appears:
+    https://www.silabs.com/developer-tools/usb-to-uart-bridge-vcp-drivers
+  - Receiver board (30-pin ESP32 DevKit, USB-C) appears to use a CH340 chip.
+    If no COM port appears:
+    https://www.wch-ic.com/downloads/CH341SER_EXE.html
+To check: plug in one board, open Device Manager, look under
+"Ports (COM & LPT)" for a new COM port.
+
+
+1.3 VS CODE EXTENSIONS
+    code --install-extension platformio.platformio-ide
+    code --install-extension ms-python.python
+Open VS Code once and wait: PlatformIO finishes installing in the
+background (bottom-right corner). Restart VS Code when it asks.
+
+
+1.4 GET THE CODE
+If you already have the SIGNYALES folder, just update it:
+    cd $HOME\Documents\SIGNYALES        (or wherever it is)
+    git switch code-tasks
+    git pull
+    git --no-pager log -1 --oneline
+The last line must start with 120bc04 (or a newer commit you were told to use).
+
+New laptop:
+    cd $HOME\Documents
+    git clone https://github.com/gmdb22/SIGNYALES.git
+    cd SIGNYALES
+    git switch code-tasks
+    git --no-pager log -1 --oneline
+
+In VS Code: File -> Open Folder -> SIGNYALES. Trust the authors when asked.
+
+
+1.5 PYTHON ENVIRONMENT (folder: SIGNYALES)
+Skip if pi-side\venv already exists and the GUI's checks passed.
+    py -3.13 -m venv pi-side\venv
+    pi-side\venv\Scripts\python.exe -m pip install --upgrade pip
+    pi-side\venv\Scripts\python.exe -m pip install -r pi-side\requirements.txt scikit-learn
+This downloads TensorFlow; it can take several minutes.
+
+
+1.6 CHECK EVERYTHING (folder: SIGNYALES)
+Open the app:
+    pi-side\venv\Scripts\python.exe gui\signyales_gui.py
+Testing mode:
+  - Run all software checks              -> all PASS
+  - Training smoke test                  -> PASS
+  - Compile: Left glove, Right glove, Receiver, MAC address utility,
+    Glove hardware check                 -> each SUCCESS
+If all pass, the laptop is ready.
+
+The GUI's Active mode -> Hardware helper tab is used in steps 2 and 3:
+it has the COM port picker, Compile / Upload buttons for each firmware,
+the serial monitor, and a "Send 'c'" button for calibration.

@@ -1,5 +1,8 @@
 # Signyales — Auto-Start on Boot
 
+(First-time Pi setup, before any of this: `setup_pi.sh` in this folder;
+steps in `flashing_kit/4_Raspberry_Pi/`.)
+
 There are two ways to start Signyales automatically. Use one, not both
 (they would fight over the serial port):
 

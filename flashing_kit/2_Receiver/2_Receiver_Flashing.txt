@@ -1,0 +1,65 @@
+2. RECEIVER (30-pin ESP32 DevKit, USB-C)
+Needs: the laptop from step 1. Only the receiver plugged in.
+
+Source in the repository:
+    firmware/tools/get_mac_address   (temporary: reads the MAC address)
+    firmware/receiver                (the real receiver firmware)
+
+You can use the GUI (Active mode -> Hardware helper) or the PlatformIO
+terminal (VS Code: Ctrl+Shift+P -> "PlatformIO: New Terminal"). Both are
+shown below.
+
+
+2.1 READ THE RECEIVER'S MAC ADDRESS
+GUI:
+  1. Plug in the receiver. Press Refresh and pick its COM port.
+  2. Press "Upload to selected port" next to "MAC address utility".
+  3. Press "Open monitor", then press the receiver's EN (or RST) button.
+  4. Copy the line "MAC Address: XX:XX:XX:XX:XX:XX".
+
+PlatformIO terminal, from the SIGNYALES folder:
+    cd firmware\tools\get_mac_address
+    pio run -t upload
+    pio device monitor
+  Press EN on the board, copy the MAC line, then Ctrl+C to close.
+    cd ..\..\..
+
+Write the MAC down. Step 3 needs it.
+
+If the upload stops at "Connecting...": hold the board's BOOT button until
+writing starts, then let go.
+
+
+2.2 FLASH THE REAL RECEIVER FIRMWARE
+GUI: "Upload to selected port" next to "Receiver".
+
+PlatformIO terminal, from the SIGNYALES folder:
+    cd firmware\receiver
+    pio run -t upload
+    pio device monitor
+    (Ctrl+C to close, then: cd ..\..)
+
+Expected in the monitor:
+    Setup complete. Waiting for gloves...
+    [stats] frames=... | left: ratio=0.0% ... | right: ratio=0.0% ...
+A [stats] line every second. With no gloves running, ratio=0.0% is normal.
+
+
+2.3 TEST THE USB LINK ON THE LAPTOP (no gloves or Pi needed)
+The receiver sends frames on USB only while a program asks for them, so
+the monitor above shows text only. live_view.py asks, like the Pi does.
+Close the serial monitor first (only one program can use the port), then
+in PowerShell, SIGNYALES folder:
+    pi-side\venv\Scripts\python.exe pi-side\tools\live_view.py --duration 10
+Expected: "Listening on USB cable (COMx)", then lines with rate= about
+50 Hz. Both hands show STALE (no gloves on), which is normal. A
+"receiver: ..." line each second shows the receiver's own [stats].
+"No receiver found on USB" = not plugged in or a charge-only cable.
+
+2.4 LATER: CONNECT THE RECEIVER TO THE PI (see 4_Raspberry_Pi, step 4.6)
+Default: the same USB cable, into a Pi USB port. Nothing else.
+Option (UART): jumper wires, and choose "UART wires" in the app:
+  Receiver D17 (TX)  -> Pi pin 10 (GPIO15, RX)
+  Receiver D18 (RX)  -> Pi pin 8  (GPIO14, TX)
+  Receiver GND       -> Pi pin 6  (GND)
+TX goes to RX (crossed). 3.3 V logic only; do not connect the Pi's 5 V pins.

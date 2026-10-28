@@ -17,6 +17,8 @@ signyales/
 ├── gui/                      The Signyales app (laptop and Pi): Testing mode
 │                             (every check is a button) and Active mode
 │                             (recognize, record, mirror, hardware helper)
+├── flashing_kit/             Step-by-step setup and flashing, one folder per
+│                             device (laptop, receiver, gloves, Pi) + checklist
 ├── tools/                    Laptop-side helpers: test_dashboard.py (one-click
 │                             no-hardware tests), results_visualizer.py
 ├── .github/workflows/        CI: runs the no-hardware tests on every push/PR

@@ -1,0 +1,97 @@
+3. GLOVES (ESP32-DevKitC-32E clone, CP210x USB)
+Needs: the laptop from step 1 and the receiver's MAC from step 2.
+One glove plugged in at a time. Do NOT connect the charger's 5V OUT cable
+while the glove is on USB.
+
+Source in the repository:
+    firmware/tools/glove_hw_check   (temporary test, sends nothing wirelessly)
+    firmware/glove                  (the real glove firmware, left and right)
+
+
+3.1 LABEL THE BOARDS
+Put tape marked L and R on the two glove boards (not just the gloves).
+The left/right choice is made when you upload, so the label is what stops
+the wrong firmware going on the wrong glove.
+
+
+3.2 PUT THE RECEIVER'S MAC INTO THE GLOVE SETTINGS (once, for both gloves)
+From the SIGNYALES folder:
+    code firmware\glove\src\config.h
+Find this line:
+    static uint8_t RECEIVER_MAC[6] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+Replace it with your MAC, one 0x.. per pair. Example: AA:BB:CC:11:22:33 ->
+    static uint8_t RECEIVER_MAC[6] = {0xAA, 0xBB, 0xCC, 0x11, 0x22, 0x33};
+Save (Ctrl+S). Check:
+    Select-String -Path firmware\glove\src\config.h -Pattern RECEIVER_MAC
+Do NOT commit this change (every receiver has its own MAC).
+
+
+3.3 HARDWARE CHECK (do this first on each glove)
+GUI (Active mode -> Hardware helper): pick the glove's COM port,
+"Upload to selected port" next to "Glove hardware check", then "Open monitor"
+and press the board's EN button.
+
+PlatformIO terminal, from the SIGNYALES folder:
+    cd firmware\tools\glove_hw_check
+    pio run -t upload
+    pio device monitor
+    (press EN on the board)
+
+What it prints first: the chip, the reason for the last reset, and an I2C
+scan (the motion sensor should be found on SDA=GPIO21 SCL=GPIO22 at 0x68,
+WHO_AM_I=0x68; if it shows up on GPIO12/GPIO14 instead, the IMU rework
+hasn't been done).
+Then readings 4 times a second:
+    J1 thumb, J2 index, J3 middle, J4 ring, J5 pinky (IO36), J6 palm (IO39),
+    and the old pins J5/J6/J7 (IO25-IO27) for comparison.
+
+Type a letter and press Enter (GUI: type it in the box next to Send):
+    r   reset the low/high values
+    s   summary: low, high and spread of each sensor
+    w   Wi-Fi on/off (old pins IO25-IO27 should stop changing when on)
+    i   scan for the motion sensor again
+    p   pause / resume
+
+Do this sequence and copy ALL the output to Claude:
+    r -> bend each finger and the palm fully a few times -> s
+    w -> r -> bend again -> s
+
+Before the rework, expect small spreads (470 Ohm resistors) and noise on
+J5 pinky / J6 palm (the jumpers to IO36/IO39 aren't there yet).
+
+
+3.4 FLASH THE GLOVE FIRMWARE
+Left glove (board labelled L):
+  GUI: "Upload to selected port" next to "Left glove".
+  PlatformIO terminal, from the SIGNYALES folder:
+    cd firmware\glove
+    pio run -e left_glove -t upload
+    pio device monitor
+Expected:
+    Signyales glove firmware starting. This unit: LEFT
+    Setup complete. Streaming...
+
+Right glove (board labelled R): same, with "Right glove" / -e right_glove.
+Expected: "This unit: RIGHT".
+
+If you see "FATAL: MPU6050 not found", copy the lines after it (they list
+what was found on the I2C bus) and send them to Claude.
+
+
+3.5 CALIBRATE EACH GLOVE (after every new flash of the glove firmware)
+In the monitor, send c (GUI: the "Send 'c' (calibrate glove)" button).
+For 8 seconds, bend and straighten all 5 fingers and the palm repeatedly.
+It prints:
+    Sensor 0 (thumb): min=... max=...
+    ...
+    Sensor 5 (palm): min=... max=...
+A healthy sensor has a spread of several hundred or more. Before the
+rework, small spreads are expected.
+
+
+3.6 CHECK THE RECEIVER SEES THE GLOVES
+Unplug the glove from the laptop, power both gloves (USB power bank or a
+phone charger is fine), plug the receiver into the laptop and open its
+monitor. The [stats] lines should now show a high ratio for both hands.
+ratio=0.0% for a glove means it isn't heard: re-check the MAC in 3.2 and
+re-flash that glove.

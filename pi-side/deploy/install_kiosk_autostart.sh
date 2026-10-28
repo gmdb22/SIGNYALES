@@ -34,7 +34,7 @@ DESKTOP_FILE="$AUTOSTART_DIR/signyales-kiosk.desktop"
 
 if [ ! -x "$PYTHON_BIN" ]; then
   echo "No Python environment at $PYTHON_BIN."
-  echo "Run the Pi setup first (flashing kit: 4_Raspberry_Pi/setup_pi.sh)."
+  echo "Run the Pi setup first: bash $REPO/pi-side/deploy/setup_pi.sh (steps in flashing_kit/4_Raspberry_Pi/)."
   exit 1
 fi
 if ! "$PYTHON_BIN" -c "import tkinter" 2>/dev/null; then

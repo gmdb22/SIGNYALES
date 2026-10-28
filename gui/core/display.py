@@ -130,7 +130,7 @@ def friendly_error(message: str, port: str) -> str:
     if "no such file" in m or "could not find" in m or "filenotfound" in m:
         if str(port).startswith("/dev/ttyAMA"):
             return (f"{port} doesn't exist. For the UART option the Pi's serial port has to be "
-                    "turned on (flashing kit, Raspberry Pi step 4.5); or choose USB")
+                    "turned on (flashing_kit/4_Raspberry_Pi, step 4.5); or choose USB")
         return f"{port} doesn't exist. Is the receiver still plugged in? Elsewhere, check --port"
     if "permission denied" in m:
         return (f"no permission to use {port}. Add this user to the 'dialout' group "

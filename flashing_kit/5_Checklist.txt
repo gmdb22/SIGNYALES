@@ -1,0 +1,41 @@
+SIGNYALES FLASHING CHECKLIST (code-tasks, "Receiver link: USB cable by default" or newer)
+Tick each box. Copy any output that doesn't match and send it to Claude.
+
+LAPTOP (1_Laptop)
+[ ] git, py -3.13, code all print versions
+[ ] Glove board and receiver each show a COM port (drivers OK)
+[ ] SIGNYALES on code-tasks, up to date (git pull)
+[ ] GUI: Run all software checks PASS, Training smoke test PASS
+[ ] GUI: Compile SUCCESS for Left glove, Right glove, Receiver,
+        MAC address utility, Glove hardware check
+
+RECEIVER (2_Receiver)
+[ ] MAC address read:  __ : __ : __ : __ : __ : __
+[ ] Receiver firmware flashed, monitor shows [stats] every second
+[ ] USB link on the laptop: live_view.py --duration 10 shows about 50 Hz
+
+GLOVES (3_Gloves)
+[ ] Boards labelled L and R
+[ ] RECEIVER_MAC set in config.h (not committed)
+[ ] Left:  hardware check run, output copied (r/s, w/r/s)
+[ ] Right: hardware check run, output copied (r/s, w/r/s)
+[ ] Left glove firmware flashed: "This unit: LEFT", calibrated (c)
+[ ] Right glove firmware flashed: "This unit: RIGHT", calibrated (c)
+[ ] Receiver [stats] shows a high ratio for both gloves
+
+RASPBERRY PI (4_Raspberry_Pi)
+[ ] Raspberry Pi OS (64-bit) written with Imager, first boot OK
+[ ] setup_pi.sh finished with DONE (versions copied), rebooted
+[ ] Software checks pass (round-trip, unit, GUI core, live_view, main)
+[ ] Speaker and subtitle check: seen and heard
+[ ] Receiver on a Pi USB port (data cable)
+    (UART option only: loopback b'hello', wired D17->10, D18->8, GND->6,
+     "UART wires" chosen in Active mode)
+[ ] live_view.py --duration 30 shows both hands
+[ ] Kiosk works by hand (--kiosk), autostart installed, raspi-config
+    Desktop Autologin + Screen Blanking No, after reboot it opens by itself
+
+Notes / problems:
+______________________________________________________________________
+______________________________________________________________________
+______________________________________________________________________

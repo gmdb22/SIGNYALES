@@ -1,0 +1,78 @@
+SIGNYALES FLASHING KIT: START HERE
+Kept in the repository as flashing_kit/ since 29 October 2026, so it
+always matches the code in the same commit (branch code-tasks). It was
+first handed out as a zip (25 Oct, last version v4).
+Current setup: 6 flex sensors per glove (5 fingers + 1 palm), motion
+sensor on IO21/IO22, kiosk mode for plug and play, receiver on one USB
+cable.
+
+
+WHAT THIS KIT IS
+Everything you need to install and flash, one folder per device, in the
+order to do them. It lives in the repository (flashing_kit/), so read it
+there after "git pull", or on GitHub. The Pi setup script is in
+pi-side/deploy/setup_pi.sh; step 4.3 says how to get it onto the Pi. The firmware and app themselves are NOT copied into this
+kit: they come from the repository, so you always flash the current, tested
+version. The kit tells you exactly where each piece comes from and what to
+type.
+
+There are no ready-made firmware files (.bin) in this kit on purpose: the
+glove firmware needs YOUR receiver's MAC address built into it, so it has
+to be compiled on your laptop after step 2.
+
+
+ORDER
+  1_Laptop        Install Git, Python 3.13, VS Code + PlatformIO, the USB
+                  drivers, get the code, make the Python environment.
+                  (Once. About 30-60 minutes, mostly downloads.)
+  2_Receiver      Read the receiver's MAC address, then flash the receiver
+                  firmware. (About 10 minutes.)
+  3_Gloves        Put the MAC into the glove settings, run the hardware
+                  check on each glove, then flash the left and right glove
+                  firmware and calibrate. (About 20 minutes per glove.)
+  4_Raspberry_Pi  Put Raspberry Pi OS on the microSD card, run the setup
+                  script, check the serial port, wire the receiver, and
+                  make Signyales start by itself (plug and play).
+                  (About 45-90 minutes, mostly downloads.)
+  5_Checklist.txt One page to tick off as you go.
+
+Steps 2 and 3 need the laptop from step 1. Step 4 can be done in parallel
+by someone else.
+
+
+WHAT YOU NEED ON THE DESK
+  - Windows laptop with internet
+  - Both gloves, the receiver board, the Raspberry Pi 5 with its 27 W power
+    supply and active cooler, a microSD card (32 GB+), a card reader
+  - USB DATA cables: one for the glove boards' USB port, and a USB-A to
+    USB-C one for the receiver (laptop, then Pi). Some cables only charge
+    and won't work: the receiver's cable carries its data to the Pi.
+  - Monitor + micro-HDMI to HDMI cable, USB keyboard and mouse for the Pi
+  - Only for the UART option (not needed with the USB cable): 3
+    female-to-female jumper wires (receiver to Pi), plus 1 for the Pi's
+    loopback test
+  - Sound for the Pi (it has no headphone jack): a USB-A to 3.5 mm sound
+    card, a 3.5 mm AUX cable and a speaker with an AUX input
+
+
+IMPORTANT BEFORE YOU START
+  - The glove firmware needs the glove rework: 47 kOhm resistors, J5 -> IO36,
+    J6 -> IO39, and the motion sensor moved to SDA IO21 / SCL IO22 with IO12
+    left unconnected. With the sensor still on IO12 the board may not start
+    at all (boot loop); with it on IO12/IO14 but booting, the firmware stops
+    at "MPU6050 not found". Without the resistor change the finger readings
+    barely move. The hardware check in 3_Gloves shows all of this.
+  - Never power a glove from the charger's 5V OUT while it is on USB.
+  - Plug in ONE board at a time when uploading.
+  - Do not commit the RECEIVER_MAC change to git.
+
+
+STATUS OF THESE INSTRUCTIONS (be honest about what's proven)
+  - Laptop steps: match the project owner's Windows setup, where the software
+    checks and all firmware compiles passed on 25 Oct 2026.
+  - Run for real on 26-27 Oct 2026: Pi steps 4.1-4.4 (the setup script took
+    three runs; this version includes the fix) and the receiver flash.
+  - The right glove uploaded but boot-looped (motion sensor on IO12); the left
+    glove has a fault being checked. The glove steps, the loopback test,
+    wiring the receiver and plug and play have NOT been run yet.
+    If a step doesn't do what it says, stop and copy the exact output.
