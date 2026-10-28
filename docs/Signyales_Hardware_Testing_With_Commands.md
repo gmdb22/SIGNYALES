@@ -3,7 +3,11 @@
 > **Older guide (13 Oct 2026), kept for reference.** For hardware testing, use
 > `docs/testing_handoff/Signyales_Hardware_Testing_Handoff.md` at tag `handoff-4`.
 > This page has no Stage 6b (subtitle and speaker check) and no GUI, and may be
-> out of date in other places.
+> out of date in other places. Changes since it was written (29 Oct 2026):
+> gloves use the original ESP32 with **6 flex sensors** (5 fingers + palm) and
+> the IMU on IO21/IO22; the receiver connects to the Pi with **one USB data
+> cable** by default (UART wires are an option, chosen in the app's Active
+> mode), so the Pi commands below no longer need `--port`.
 
 This is the complete process for connecting the real hardware to the real
 code and verifying each stage works, in order. Every command is exact —
@@ -75,8 +79,8 @@ Setup complete. Streaming...
 ```
 
 **Calibrate it** — with the serial monitor still open, type `c` and press
-Enter. Flex and relax all 5 fingers for 8 seconds. Confirm you see 5 lines
-like `Finger 0: min=800 max=3200` with a real spread between min and max
+Enter. Flex and relax all 5 fingers and the palm for 8 seconds. Confirm you
+see 6 lines like `Sensor 0 (thumb): min=800 max=3200` with a real spread between min and max
 (not numbers close together). Press `Ctrl+C` to close the monitor.
 
 **Repeat for the right glove:**
@@ -114,10 +118,15 @@ keeps running on its own either way.
 
 ---
 
-## Part 6 — Wire the receiver to the Raspberry Pi
+## Part 6 — Connect the receiver to the Raspberry Pi
 
-Connect the 3 UART wires (crossed TX/RX + shared GND) per the wiring
-diagram.
+**Default (since 29 Oct 2026): one USB data cable** from the receiver to a
+Pi USB port. Nothing else to set up; skip to Part 7 and the live check
+(`python tools/live_view.py --duration 10`, about 50 Hz).
+
+**Option: UART wires.** Connect the 3 UART wires (crossed TX/RX + shared
+GND) per the wiring diagram, choose "UART wires" in the app (Active mode),
+and do the rest of this part.
 
 **Pi 5-specific — do not trust `/dev/serial0`.** Unlike earlier Pi models,
 the Pi 5's `/dev/serial0` points to a separate 3-pin debug connector, not
@@ -152,8 +161,8 @@ directly to GPIO15 (pin 10), then in the `pi-side` venv:
 python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1); s.write(b'hello'); time.sleep(0.2); print(s.read(5))"
 ```
 Expect `b'hello'`. **Remove the jumper** once confirmed, then wire the
-receiver for real. Use `/dev/ttyAMA0` (not `/dev/serial0`) in every
-command for the rest of this guide.
+receiver for real. The UART option uses `/dev/ttyAMA0` (not `/dev/serial0`);
+add `--link uart` to a command to force it.
 
 If the test printed `b''` or the device didn't exist: try adding
 `dtoverlay=disable-bt` to the same config.txt and reboot, then repeat the
@@ -196,22 +205,23 @@ First, confirm data is actually arriving. From `pi-side/`, with the venv
 active and both gloves and the receiver powered:
 
 ```bash
-python tools/live_view.py --port /dev/ttyAMA0 --duration 30
+python tools/live_view.py --duration 30
 ```
 
 **Expected:** a line of values for each hand twice a second, a frame rate
 near 50 Hz, and a summary at the end. Move your fingers and the numbers
 should change.
 
-**If it prints `No frames for ...s`:** nothing is reaching the Pi. Almost
-always the UART wiring — double check TX/RX are actually crossed (receiver
-TX → Pi RX, receiver RX → Pi TX), not wired straight-through — or the wrong
-port or baud.
+**If it prints `No frames for ...s` or `No receiver found on USB`:** nothing
+is reaching the Pi. On USB: a charge-only cable, or old receiver firmware
+(re-flash it). On UART: almost always the wiring — double check TX/RX are
+actually crossed (receiver TX → Pi RX, receiver RX → Pi TX), not wired
+straight-through.
 
 Then confirm the main app starts:
 
 ```bash
-python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 -v
+python -m signyales_hub.main -v
 ```
 
 **Expected:** a couple of startup lines ("Opened serial link…") and a
@@ -230,7 +240,7 @@ This part only applies after you've collected real gesture data and
 trained a model — not yet, but documented here so you have it when ready.
 
 ```bash
-python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model -v
+python -m signyales_hub.main --model-dir model -v
 ```
 Wear both gloves, perform a known gesture, confirm `[gesture] <name>`
 prints and is spoken aloud.
@@ -249,8 +259,8 @@ python tools/accuracy_logger.py --gestures kumusta salamat oo --trials 10 --mode
 |---|---|---|
 | 2 | `pio run -t upload` + monitor | A MAC address prints |
 | 4 | `pio run -e left_glove -t upload` | `Setup complete. Streaming...` |
-| 4 | Calibration (`c`) | 5 finger lines, real min/max spread |
+| 4 | Calibration (`c`) | 6 sensor lines (5 fingers + palm), real min/max spread |
 | 5 | Receiver flash + both gloves on | `[stats]` line, ratios near 100% |
-| 6 | Loopback test on `/dev/ttyAMA0` | Prints `b'hello'` |
+| 6 | USB: `live_view.py --duration 10` (UART option: loopback on `/dev/ttyAMA0`) | About 50 Hz (loopback: prints `b'hello'`) |
 | 8 | `test_frame_roundtrip.py` | `PASS` |
 | 9 | `main.py -v` with real hardware | Continuous clean log output |

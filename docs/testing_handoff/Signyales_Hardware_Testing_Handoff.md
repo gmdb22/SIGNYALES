@@ -33,11 +33,11 @@ It also says which folder to be in.
 - [ ] A microSD card (32 GB or larger), and a card reader for your laptop if it has no SD slot
 - [ ] A monitor, a micro-HDMI to HDMI cable (the Pi 5 only has micro-HDMI ports), and a USB keyboard and mouse
 - [ ] Internet for the Pi during setup (Wi-Fi, or an Ethernet cable). It's only needed for the downloads in Part A.
-- [ ] A speaker for the Pi, for Stage 6b. A USB speaker is easiest: the Raspberry Pi 5 has **no 3.5 mm audio jack**, so a plug-in speaker needs a USB sound adapter, or use a monitor with speakers over HDMI
+- [ ] Sound for the Pi, for Stage 6b: a USB-A to 3.5 mm sound card, a 3.5 mm AUX cable and a speaker with an AUX input (the project's chosen setup, 29 Oct 2026). The Raspberry Pi 5 has **no 3.5 mm audio jack**, so the sound card is needed. A monitor with speakers over HDMI also works for a quick test.
 
 **For the laptop (Part B)**
 - [ ] A Windows laptop with internet, where you're allowed to install programs
-- [ ] A USB **data** cable for each ESP32 board (2 gloves and the receiver). Some cables only charge and won't work.
+- [ ] A USB **data** cable for each ESP32 board (2 gloves and the receiver). Some cables only charge and won't work. The receiver's USB-A to USB-C cable later connects it to the Pi (Stage 5), so it must be a data cable.
 
 **Hardware and access**
 - [ ] The assembled hardware: 2 gloves, 1 receiver dongle — see `docs/Signyales_Hardware_Assembly_Guide.docx` in the repo for wiring diagrams if anything isn't assembled yet
@@ -369,7 +369,7 @@ training happens on the laptop.
 
 - [ ] **Voltage dividers:** with a multimeter, check each flex sensor's divider output while relaxed and fully bent. It must stay within 0 to 3.3 V. The ESP32 pins are not 5 V tolerant, and one wiring mistake can damage a board.
 - [ ] **Battery polarity:** confirm the LiPo's polarity matches your board's battery connector before plugging it in. A reversed battery can destroy the board.
-- [ ] **UART wiring:** receiver TX goes to Pi RX and receiver RX to Pi TX (crossed), plus a shared ground, on the Pi's 3.3 V logic pins only: Pi pins 8 and 10, ground on pin 6. Straight-through wiring gives silence, not an error.
+- [ ] **Receiver to Pi:** by default one USB data cable, nothing else. Only for the UART option: receiver TX goes to Pi RX and receiver RX to Pi TX (crossed), plus a shared ground, on the Pi's 3.3 V logic pins only: Pi pins 8 and 10, ground on pin 6. Straight-through wiring gives silence, not an error. Never connect the Pi's 5 V pins to the receiver.
 - [ ] **Pi 5 power and cooling:** use the 27 W USB-C supply and the active cooler. A throttling Pi can look like a software fault.
 - [ ] **Battery safety:** if a battery swells, gets hot or smells, unplug it and stop testing. Report it.
 
@@ -378,18 +378,20 @@ training happens on the laptop.
 *Gloves*
 - Calibration: each finger's printed min/max should span several hundred counts or more. A tiny spread means a dead or floating sensor. After calibration, that sensor shows up as wild noise rather than flat, so check the min/max at calibration time (Stage 2), not the live values later.
 - A glove that was never calibrated uses placeholder bounds, so its values aren't trustworthy. Don't recalibrate in the middle of a recording session: it changes the value scale, and older recordings won't match newer ones.
-- `MPU6050 not found` means the glove halts at startup. Check the IMU wiring and that AD0 is tied to ground.
+- `MPU6050 not found` means the glove halts at startup. Check the IMU wiring (SDA on IO21, SCL on IO22 after the rework) and that AD0 is tied to ground.
+- A glove that restarts over and over (`spi_flash ... Probe failed`, `boot:0x33`) most likely still has the IMU's SDA on IO12, a boot strapping pin: the rework moves it to IO21 and leaves IO12 unconnected.
 - IMU values stuck flat at a maximum during fast movement mean the sensor range is saturating (accelerometer set to 4 g, gyro to 500 degrees per second). Report it.
 
 *Wireless link*
 - `ratio=0.0%` means that glove has never been heard. The most likely cause is a wrong `RECEIVER_MAC` (Stage 1b).
 - Test with the gloves worn and the hands moving, not still on a bench: motion and the body can expose problems a bench test hides.
-- The receiver's `[stats]` ratio is cumulative since boot and freezes when a glove goes silent. Use `live_view.py` for cutoff times, and power-cycle between range trials.
+- The receiver's `[stats]` ratio is cumulative since boot and freezes when a glove goes silent. Use `live_view.py` for cutoff times, and power-cycle between range trials. On the USB link, `live_view.py`, Active mode and the kiosk (F3) show the receiver's `[stats]` numbers on the Pi too.
 - Keep the receiver and Pi in one fixed spot, and note where you tested. Other 2.4 GHz devices (Wi-Fi, Bluetooth) can change range results.
 
 *Raspberry Pi*
-- Use `/dev/ttyAMA0`, not `/dev/serial0`, and confirm it with the loopback test (Stage 5) first.
-- Baud must be 460800 on both ends. Only one program can read the UART at a time.
+- The receiver link is a setting: **USB cable** (default; found automatically) or **UART wires**, chosen in the app's Active mode and saved for the kiosk and the tools. `--link uart` or `--link usb` overrides it for one command.
+- UART option only: use `/dev/ttyAMA0`, not `/dev/serial0`, and confirm it with the loopback test (Stage 5) first. Baud is 460800 on both ends (USB uses 115200; both are set in the code).
+- Only one program can read the receiver at a time: close the kiosk (`pkill -f signyales_gui.py`) before running a tool.
 - With no model loaded, the main app prints nothing per frame. Use `live_view.py` to see data. A frame rate far below about 50 Hz means drops or stalls.
 
 *Data quality (matters before training)*
@@ -500,7 +502,13 @@ Setup complete. Streaming...
 **If instead you see `FATAL: MPU6050 not found`:** this means the IMU
 sensor isn't wired correctly — check its connections against the wiring
 diagram in the Hardware Assembly Guide before assuming it's a software
-problem.
+problem. The firmware expects SDA on IO21 and SCL on IO22 (after the
+rework). The hardware check (`firmware/tools/glove_hw_check`, see
+`firmware/glove/README.md`) scans both IO21/IO22 and the old IO12/IO14.
+
+**If the board restarts over and over** (`Probe failed`, `boot:0x33`),
+the IMU is most likely still on IO12; see the rework list in
+`firmware/glove/README.md`.
 
 **Now calibrate it.** With the serial monitor still open, type `c` and
 press Enter. Flex and relax all 5 fingers and the palm repeatedly for 8
@@ -564,9 +572,31 @@ If it still stays at 0%, report the stats lines and the MAC you used.
 
 ### Stage 5 — Connect the receiver to the Raspberry Pi
 
-This requires physically wiring 3 wires between the receiver and the Pi's
-GPIO header (TX, RX — crossed — and GND). See the wiring diagram in the
-Hardware Assembly Guide for exact pins.
+**Default: one USB cable.** Plug the receiver into a Pi USB port with its
+USB-A to USB-C **data** cable. It powers the receiver and carries the data;
+the Pi finds it by its CH340 USB chip, so there are no wires, no
+raspi-config step and no loopback test. Check it (PI, venv active, from
+`pi-side/`), with or without the gloves on:
+```bash
+python tools/live_view.py --duration 10
+```
+**Expected:** `Listening on USB cable (/dev/ttyUSB0)` (the number may
+differ), then lines with `rate=` about 50 Hz. Without gloves both hands
+show `STALE`, which is normal. A `receiver: ...` line shows the receiver's
+own `[stats]`. `No receiver found on USB` means it isn't plugged in, or the
+cable only charges. Then continue with Stage 6.
+
+The receiver must have the current firmware (Stage 4): older receiver
+firmware sends nothing on USB. The same check works on the laptop before
+the Pi is ready (PowerShell, repo root):
+`pi-side\venv\Scripts\python.exe pi-side\tools\live_view.py --duration 10`.
+
+**Option: UART wires.** Only if you use the GPIO wiring instead. This
+requires physically wiring 3 wires between the receiver and the Pi's GPIO
+header (TX, RX — crossed — and GND). See the wiring diagram in the
+Hardware Assembly Guide for exact pins. Keep the receiver's USB-C cable in
+a Pi USB port for power. In the app choose **Active → Receiver link →
+UART wires** (saved), or add `--link uart` to the commands below.
 
 **Important, Pi 5-specific: do not trust `/dev/serial0` here.** On earlier
 Raspberry Pi models, `/dev/serial0` pointed to the GPIO header UART. On the
@@ -611,8 +641,8 @@ python3 -c "import serial,time; s=serial.Serial('/dev/ttyAMA0',115200,timeout=1)
 
 - **If you got `b'hello'`:** `/dev/ttyAMA0` is the correct port. Wire the
   receiver as shown in the Hardware Assembly Guide (receiver TX → Pi RX,
-  receiver RX → Pi TX, GND → GND), and use `--port /dev/ttyAMA0` (not
-  `/dev/serial0`) in every command for the rest of this guide.
+  receiver RX → Pi TX, GND → GND), and choose UART as above (it uses
+  `/dev/ttyAMA0`, not `/dev/serial0`).
 - **If the device doesn't exist, or it printed `b''`:** stop and report
   the Step 1 output plus the exact error. As a fallback ONLY after
   reporting that, you can add `dtoverlay=disable-bt` to the same file,
@@ -632,18 +662,19 @@ installed in Part A6 and checked without hardware in Part C2.
 With the receiver wired up and both gloves powered on, watch the live data
 for 30 seconds while you open and close the fingers of both hands:
 ```bash
-python tools/live_view.py --port /dev/ttyAMA0 --duration 30
+python tools/live_view.py --duration 30
 ```
 It prints each hand's flex/accel/gyro values twice a second, then a summary
 (frame rate, how often each hand's data was fresh, sequence gaps, and each
 finger's min/max). If it prints `No frames for ...s`, the Pi is receiving
-nothing: re-check Stage 5 (TX/RX crossed, port, baud).
+nothing: re-check Stage 5 (USB: data cable, current receiver firmware;
+UART: TX/RX crossed, link set to UART).
 
 **Report back:** the full summary printed at the end.
 
 Then confirm the main app also starts:
 ```bash
-python -m signyales_hub.main --port /dev/ttyAMA0 -v
+python -m signyales_hub.main -v
 ```
 With no model, this app prints **no per-frame output**. Seeing only the
 "Opened serial link" line and a "No model loaded" warning is normal, and
@@ -710,7 +741,7 @@ on your part.
 
 If it is there:
 ```bash
-python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model -v
+python -m signyales_hub.main --model-dir model -v
 ```
 
 Wear both gloves and perform a gesture. You should see `[gesture] <name>`
@@ -736,9 +767,9 @@ instead of synthetic data.
 positions, plus a few seconds with the hands idle. Use `--out ../training/data`
 (the tool's built-in default points to a folder that doesn't exist in this repo):
 ```bash
-python tools/collect_gesture.py --label fist --reps 5 --port /dev/ttyAMA0 --out ../training/data
-python tools/collect_gesture.py --label open --reps 5 --port /dev/ttyAMA0 --out ../training/data
-python tools/collect_gesture.py --label idle --reps 3 --port /dev/ttyAMA0 --out ../training/data
+python tools/collect_gesture.py --label fist --reps 5 --out ../training/data
+python tools/collect_gesture.py --label open --reps 5 --out ../training/data
+python tools/collect_gesture.py --label idle --reps 3 --out ../training/data
 ```
 Files are saved as `training/data/<label>/rep_0000.npz`, and so on. Don't
 commit them to git: zip the `training/data` folder and send it instead.
@@ -763,7 +794,7 @@ commit them to git: zip the `training/data` folder and send it instead.
 These confirm the hardware gives data that is safe to train on. Run from
 `pi-side/` with the venv active, gloves and receiver powered and worn.
 
-1. **Left/right alignment.** Run `python tools/live_view.py --port /dev/ttyAMA0 --duration 15`
+1. **Left/right alignment.** Run `python tools/live_view.py --duration 15`
    twice: once moving **only the left hand's** fingers, once moving **only
    the right hand's**. In each summary, only the moved hand should show a
    large spread. If the other hand also changes, or the wrong one does,
@@ -772,11 +803,11 @@ These confirm the hardware gives data that is safe to train on. Run from
    the `std/reps` row (how much repetitions of one gesture differ) should
    be small compared with the difference between fist and open. Report the output.
 3. **Calibration survives a power cycle.** Unplug and replug one glove
-   (don't press `c`), run `python tools/live_view.py --port /dev/ttyAMA0 --duration 15`
+   (don't press `c`), run `python tools/live_view.py --duration 15`
    while flexing its fingers, and report whether the min/max are similar to
    Stage 2's. (The firmware says it saves calibration to flash; this checks it.)
 4. **Longer run.** Run
-   `python tools/live_view.py --port /dev/ttyAMA0 --duration 1800 --interval 60`
+   `python tools/live_view.py --duration 1800 --interval 60`
    (30 minutes, one line per minute). Report the final summary, especially
    the fresh-data percentages and sequence gaps, and anything that stalled.
 
@@ -790,7 +821,7 @@ These confirm the hardware gives data that is safe to train on. Run from
    venv active, start the live viewer for up to 3 hours, one status line
    every 5 minutes:
    ```bash
-   python tools/live_view.py --port /dev/ttyAMA0 --duration 10800 --interval 300
+   python tools/live_view.py --duration 10800 --interval 300
    ```
    Leave the gloves worn or held still. Don't run `main.py` at the same
    time: two programs can't both reliably read the same serial port.
@@ -827,20 +858,23 @@ trials, so use this procedure:
 (Power-cycling restarts the counters. This reasoning comes from reading the
 receiver code, not from running it on hardware.)
 
-**Optional, if a second USB cable is available:**
+**On the USB link (default)** the receiver's `[stats]` reaches the Pi:
+`python tools/live_view.py --duration 40` prints a `receiver: ...` line
+every interval, so copy the latest one as the trial's result.
+**On the UART link**, with the receiver's USB on the laptop or the Pi,
 `python tools/receiver_link_logger.py --port <receiver USB port> --duration 60 --out results/range_<distance>m_run<n>.csv`
 (run from `pi-side/`) logs the stats line to a CSV for later averaging.
 To find the receiver's USB port, run `ls /dev/ttyACM* /dev/ttyUSB*` on the
-Pi, or `pio device list` on the laptop. This
-tool has not been tested against real hardware.
+Pi, or `pio device list` on the laptop. Neither has been tested against
+real hardware yet.
 
 **Limitation:** the `[stats]` ratio only counts a packet as dropped when a
 *later* packet arrives and reveals the gap. Packets lost at the very end of
 a hold (for instance a glove sliding out of range) are never counted, so at
 the edge of range the ratio can overstate delivery. If the Pi is reachable
 at the same time, you can also run
-`python tools/live_view.py --port /dev/ttyAMA0 --duration 40` during each
-trial (receiver USB on the laptop, UART on the Pi, so both work together).
+`python tools/live_view.py --duration 40` during each
+trial (on the USB link it shows both measures at once).
 Its `fresh in X%` means a packet arrived within the receiver's 30 ms window,
 which is a different measure from `[stats]`, so report both and label each.
 Start it first, then power on the gloves: the seconds before they connect
@@ -864,7 +898,7 @@ Stage 1b (MAC address):      DONE — [address read]
 Stage 2 (left glove):        PASS / FAIL — [calibration numbers]
 Stage 3 (right glove):       PASS / FAIL — [calibration numbers]
 Stage 4 (receiver sees both): PASS / FAIL — [stats line]
-Stage 5 (Pi UART wiring):    PASS / FAIL — [ls output / loopback result / port used]
+Stage 5 (receiver to Pi):    PASS / FAIL — [USB or UART | live_view rate | (UART: ls output, loopback result)]
 Stage 6 (hub app runs):      PASS / FAIL — [notes]
 Stage 6b (subtitle+speaker): PASS / FAIL — [readable Y/N, monitor or SSH | heard Y/N, speaker type]
 Stage 7 (full recognition):  PASS / FAIL / NOT APPLICABLE (no model yet)
@@ -878,6 +912,6 @@ Repo log line, laptop / Pi: ___ / ___
 ## One general rule while testing
 
 **Test one new thing at a time, in order.** If Stage 4 works but Stage 5
-doesn't, the problem is specifically in the receiver-to-Pi wiring or Pi
+doesn't, the problem is specifically in the receiver-to-Pi cable, wiring or Pi
 configuration — the gloves and wireless link are already proven fine, so
 there's no need to re-check those.

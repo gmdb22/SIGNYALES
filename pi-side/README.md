@@ -166,7 +166,7 @@ will just be wrong in a way that's hard to notice by inspection.
   Cortex-A76 can likely sustain this comfortably, but run
   `tools/benchmark_inference.py` once a real model exists and adjust if p95
   latency is close to the time budget between strides.
-- **UART setup did not get simpler on Pi 5, and changed in a new way:**
+- **UART setup (UART option only; the default USB cable needs none) did not get simpler on Pi 5, and changed in a new way:**
   `/dev/serial0` no longer points to the GPIO header UART at all (it's the
   separate debug connector instead) — use `/dev/ttyAMA0` and verify with a
   real loopback test, not a file-existence check. Whether `disable-bt` is

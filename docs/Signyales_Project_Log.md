@@ -113,3 +113,29 @@ Commit `be7fa90`. Results from the terminal output seen during the session.
   on the Pi.
 - Open: the assembler's rework and left-glove result; D1–D5 and latency; power plan (LCD,
   session length, power bank); word list and consent forms; palm sensor orientation.
+
+## 2026-10-28 to 2026-10-29
+
+- Decided: the Pi runs on its wall supply (27 W) with an HDMI monitor; sound goes through a
+  USB sound card and AUX cable to a speaker with its own power (wired, so nothing to pair or
+  reconnect; the Pi 5 has no headphone jack). The receiver connects to the Pi with one USB
+  data cable by default; the UART wires stay as an option chosen in the GUI. Still to tell the
+  adviser and the paper writer: wall power instead of the proposal's 5000 mAh power system
+  (battery life is then measured on the gloves only), the wired speaker, the USB link.
+- Commits on `code-tasks`: `4ba2220` docs for the 26-27 Oct session; `c683229` IMU moved to
+  IO21/IO22 in the glove firmware and hardware check; `47756b9` receiver link over USB by
+  default (receiver sends frames on USB while the Pi asks, Pi finds it by its CH340 chip, GUI
+  setting USB/UART saved for the kiosk, link numbers in Active mode and the kiosk with F3);
+  `334e7a2` flashing kit in the repo (`flashing_kit/`), `setup_pi.sh` in `pi-side/deploy/` and
+  now installing `swig` and `liblgpio-dev` itself. Then the docs update (this entry): the
+  Hardware Assembly Guide (new wiring figures), Software Requirements, System Implementation,
+  the handoff guide, the cheat sheet, the build walkthrough and the root README now describe
+  the hardware as built.
+- Verified in an AI assistant's Linux sandbox, synthetic data only: frame round-trip (incl. the
+  USB requests and the receiver's text between frames), Pi-side unit tests, GUI core tests, and
+  `live_view.py` and the kiosk reading a simulated receiver on a virtual serial port at about
+  50 Hz. The receiver firmware was only syntax-checked there (the ESP32 toolchain download is
+  blocked). The owner ran the GUI checks and compiles on the laptop and checked CI after the
+  push (reported done).
+- Not run yet: the receiver with the new firmware, the USB link on real hardware (CH340 on the
+  Pi or Windows), the gloves after the rework. The hardware is with the assembler.

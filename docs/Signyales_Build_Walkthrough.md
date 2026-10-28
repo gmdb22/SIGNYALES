@@ -4,6 +4,10 @@ How the codebase was built, phase by phase, and how each piece actually
 works. This follows the real order of construction, not a reverse-engineered
 narrative — each phase exists because the one before it created a need for it.
 
+Phases 0 to 7 describe the first build (early October 2026, designed for the
+proposal's ESP32-S3 gloves with 5 flex sensors). Phase 8 lists what changed
+once the real hardware was built; where the two differ, Phase 8 is current.
+
 ---
 
 ## Phase 0 — Reading the project proposal
@@ -34,7 +38,7 @@ exist yet.
 
 **`packet.h`** was written first, before any logic, because it defines the
 one thing every other layer needs to agree on: the exact byte layout of a
-sensor reading (`glove_id`, `seq`, `timestamp_ms`, 5 flex values, 3-axis
+sensor reading (`glove_id`, `seq`, `timestamp_ms`, 5 flex values (6 since Phase 8), 3-axis
 accel, 3-axis gyro, a checksum). `#pragma pack(push, 1)` forces no padding
 between fields, which matters because the receiver and the Pi's Python code
 both need to read these exact same bytes back out later — any compiler-
@@ -45,7 +49,7 @@ pins, the receiver's address, sample rate) specifically so the actual logic
 file never needs editing per-glove — only this file does.
 
 **`glove_firmware.ino`** does four things in sequence each loop iteration:
-read the 5 flex sensors and IMU, smooth the flex readings (exponential
+read the 5 flex sensors (6 since Phase 8) and IMU, smooth the flex readings (exponential
 moving average, so a jittery ADC reading doesn't look like rapid finger
 movement), normalize each flex sensor against a stored calibration (so
 "fully bent" always reads close to 4095 regardless of that specific
@@ -229,6 +233,33 @@ and renaming `pi-hub` → `pi-side` to match the existing repo's convention,
 followed by a full re-verification that nothing broke in the rename
 (`test_frame_roundtrip.py` re-run, and the training → export → hub-load
 chain re-run from scratch after the folder move).
+
+---
+
+## Phase 8 — Changes for the hardware as built (22–29 October 2026)
+
+The adviser confirmed these changes from the proposal (original ESP32,
+6 sensors, Pi 5, GUI + mirror); the rest followed from testing.
+
+- **Gloves: original ESP32** (ESP32-DevKitC-32E clone) instead of the
+  ESP32-S3. PlatformIO board `esp32dev`.
+- **6 flex sensors per glove** (5 fingers + 1 palm, for cupping, fist and
+  finger-touch signs). Only 6 ADC1 pins can be read while ESP-NOW transmits,
+  which is why it is 6. Packet 46 bytes, frame 103 bytes, **24 features** on
+  the Pi. Older 22-feature recordings are flagged and must be re-recorded.
+- **IMU on IO21/IO22.** The schematic put SDA on IO12, a boot strapping pin;
+  the right glove boot-looped (27 Oct), so the IMU moves to IO21/IO22 and
+  IO12 stays unconnected (reasoned cause, confirm after the rework).
+- **GUI app** (`gui/`): Testing mode (every check is a button), Active mode
+  (recognize, record, laptop mirror, hardware helper) and a full-screen
+  kiosk mode that starts with the Pi (plug and play).
+- **Receiver to Pi over one USB cable** (29 Oct), with the UART wires kept as
+  an option chosen in the GUI. The receiver sends frames on USB only while
+  the Pi asks for them, so its text `[stats]` still works on a laptop; on the
+  Pi the same numbers show in Active mode and the kiosk (F3).
+- **Output and power:** the Pi runs on its wall supply; sound goes through a
+  USB sound card and AUX cable to a speaker (the Pi 5 has no headphone jack);
+  only the gloves run on batteries.
 
 ---
 
