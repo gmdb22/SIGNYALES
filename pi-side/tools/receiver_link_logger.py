@@ -1,9 +1,10 @@
 """
 Signyales — Receiver Link Logger (optional, lower-level diagnostic)
 =======================================================================
-Taps the receiver dongle's USB debug console (a SEPARATE physical
-connection from the dongle's normal UART wiring to the Pi) and logs its
-once-per-second "[stats] ..." line to CSV.
+Taps the receiver dongle's USB port and logs its once-per-second
+"[stats] ..." line to CSV. For the UART link (the receiver's USB then goes
+to this computer). On the USB link the Pi app holds that port; use
+tools/live_view.py there instead, which prints the same numbers.
 
 Gives an ESP-NOW-hop-specific packet delivery ratio, distinct from
 performance_logger.py's Pi-side "was this hand's data fresh in this
@@ -11,8 +12,8 @@ frame" ratio — useful for telling apart "the glove's packet never made
 it to the receiver" from "it arrived but missed the sample-and-hold
 window by a few milliseconds".
 
-Requires a second USB cable from the receiver dongle to this computer,
-in addition to its normal wiring to the Pi's UART pins.
+Requires a USB cable from the receiver dongle to this computer, in
+addition to its UART wiring to the Pi.
 
 Usage:
     python tools/receiver_link_logger.py --port /dev/ttyUSB0 --duration 300 \\

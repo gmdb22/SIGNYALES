@@ -13,7 +13,10 @@ keeps retrying by itself, so the device can be switched on in any order:
     gloves not heard       -> "Waiting for the gloves ..." (per-glove lights)
     no trained model       -> "No trained model yet ..." (lights still work)
 
-Keys: Esc leaves/enters full screen, F2 opens the full app, Ctrl+Q quits.
+Keys: Esc leaves/enters full screen, F2 opens the full app, F3 shows or
+hides the link numbers (received %, lost, damaged, frame rate), Ctrl+Q quits.
+The receiver link is the one saved in Active mode (USB by default); the port
+is looked up again at every retry, so the receiver can be plugged in late.
 The recognition steps are the same LivePipeline the Recognize tab uses.
 """
 
@@ -24,8 +27,8 @@ from tkinter import font as tkfont
 
 from core import mirror
 from core.display import friendly_error
-from core.env import PI_SIDE, default_serial_port
-from core.live import LivePipeline, load_classifier, make_source
+from core.env import PI_SIDE, receiver_link
+from core.live import LivePipeline, link_stats_text, load_classifier, make_source
 from widgets import PANEL_BG, PANEL_FG, SubtitlePanel
 
 RETRY_S = 5           # seconds between reconnect attempts after an error
@@ -35,10 +38,14 @@ DIM = "#8a96a3"
 
 
 class KioskView(tk.Frame):
-    def __init__(self, master, app, port=None, model_dir=None, simulate=False, speak=True, share=False):
+    def __init__(self, master, app, port=None, model_dir=None, simulate=False, speak=True, share=False,
+                 link=None):
         super().__init__(master, background=PANEL_BG)
         self.app = app
-        self.port = port or default_serial_port()
+        self.port = port or None        # None = found by the receiver link at each start
+        self.link_override = link or None
+        self.link = self.link_override or receiver_link()
+        self._open_port = None          # the port actually opened (from the "started" event)
         self.model_dir = str(model_dir or (PI_SIDE / "model"))
         self.simulate = simulate
         self.speak = speak
@@ -83,6 +90,12 @@ class KioskView(tk.Frame):
         self.message.bind("<Configure>", lambda e: self.message.configure(
             wraplength=max(200, e.width - 8)))
 
+        # Link numbers, hidden until F3 is pressed.
+        self.stats = tk.Label(self, text="", font=f_hint, fg=DIM, bg=PANEL_BG, anchor="w", justify="left")
+        self.stats.bind("<Configure>", lambda e: self.stats.configure(wraplength=max(200, e.width - 8)))
+        self._stats_visible = False
+        self._stats_text = "Link numbers: waiting for data..."
+
         self.subtitle = SubtitlePanel(self, idle_text="Listening...", max_size=420, height=10)
         self.subtitle.pack(fill="both", expand=True, padx=16, pady=8)
 
@@ -91,7 +104,7 @@ class KioskView(tk.Frame):
 
         bottom = tk.Frame(self, background=PANEL_BG)
         bottom.pack(fill="x", padx=16, pady=(2, 8))
-        tk.Label(bottom, text="Esc: full screen on/off    F2: full app    Ctrl+Q: quit",
+        tk.Label(bottom, text="Esc: full screen on/off    F2: full app    F3: link numbers    Ctrl+Q: quit",
                  font=f_hint, fg=GREY, bg=PANEL_BG).pack(side="left")
         tk.Button(bottom, text="Full app", font=f_hint, fg=PANEL_FG, bg="#25303a", relief="flat",
                   activebackground="#33414e", activeforeground=PANEL_FG,
@@ -110,9 +123,12 @@ class KioskView(tk.Frame):
         self._error = None
         self._fresh = None
         self._last_status = None
+        self._open_port = None
+        self.link = self.link_override or receiver_link()   # picks up a change made in Active mode
         self._model_files = (Path(self.model_dir) / "model.tflite").exists()
         classifier = (lambda: load_classifier(self.model_dir)) if self._model_files else None
-        self.pipeline = LivePipeline(lambda: make_source(port=self.port, simulate=self.simulate),
+        link = self.link
+        self.pipeline = LivePipeline(lambda: make_source(port=self.port, simulate=self.simulate, link=link),
                                      classifier, lambda e: self.app.call(self._on_event, e))
         self._started_at = time.monotonic()
         self.pipeline.start()
@@ -130,12 +146,16 @@ class KioskView(tk.Frame):
         t = e["type"]
         if t == "started":
             self._has_model = bool(e["model"])
+            self._open_port = e.get("port") or None
             if self._has_model and self.speak and not self._said_ready:
                 self._said_ready = True
                 self.app.speaker.say("Signyales ready")
         elif t == "status":
             self._last_status = time.monotonic()
             self._fresh = (e["left_fresh_pct"], e["right_fresh_pct"])
+            src = self._src_text()
+            self._set_stats(f"{src[:1].upper()}{src[1:]}: {e.get('fps', 0)} frames/s (about 50 expected). "
+                            + link_stats_text(e))
             for hand, pct in zip(("left", "right"), self._fresh):
                 if pct >= 90:
                     self._set_glove(hand, GREEN, f"{hand.title()} glove")
@@ -154,6 +174,27 @@ class KioskView(tk.Frame):
         elif t == "stopped":
             self._schedule_retry()
         self._refresh()
+
+    # ------------------------------------------------------------ link numbers (F3)
+    def toggle_stats(self):
+        self._stats_visible = not self._stats_visible
+        if self._stats_visible:
+            self.stats.configure(text=self._stats_text)
+            self.stats.pack(fill="x", padx=16, pady=(2, 0), after=self.message)
+        else:
+            self.stats.pack_forget()
+
+    def _set_stats(self, text):
+        self._stats_text = text
+        if self._stats_visible:
+            self.stats.configure(text=text)
+
+    def _src_text(self):
+        if self.simulate:
+            return "fake glove data"
+        port = self._open_port or self.port
+        cable = "USB cable" if self.link == "usb" else "UART wires"
+        return f"the receiver ({cable}{', ' + port if port else ''})"
 
     def _set_glove(self, hand, colour, text):
         dot, label = self.gloves[hand]
@@ -179,15 +220,16 @@ class KioskView(tk.Frame):
     def _refresh(self):
         """One plain-language line: the most important thing that is wrong, or 'Ready'."""
         running = bool(self.pipeline and self.pipeline.running)
-        src = "fake glove data" if self.simulate else f"the receiver on {self.port}"
+        src = self._src_text()
         if self._error and not running:
-            text, colour = (f"Can't read {src}: {friendly_error(self._error, self.port)}. "
+            text, colour = (f"Can't read {src}: {friendly_error(self._error, self._open_port or self.port)}. "
                             f"Trying again every {RETRY_S} s.", RED)
         elif not running:
             text, colour = ("Starting...", DIM)
         elif self._no_data():
-            text, colour = (f"Waiting for {src}: no data yet. Is the receiver powered "
-                            "and wired to the Pi?", AMBER)
+            where = ("plugged into a Pi USB port with a data cable" if self.link == "usb"
+                     else "powered and wired to the Pi's GPIO pins")
+            text, colour = (f"Waiting for {src}: no data yet. Is the receiver {where}?", AMBER)
         elif self._fresh is None:
             text, colour = ("Connecting...", DIM)
         elif self._fresh == (0, 0):

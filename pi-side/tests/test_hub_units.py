@@ -175,6 +175,80 @@ with tempfile.TemporaryDirectory() as tmp:
           m["model_files"]["model.tflite"]["sha256"]
           == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
 
+# ------------------------------------------------- receiver link (USB / UART)
+from types import SimpleNamespace  # noqa: E402
+from signyales_hub import receiver_link as rl  # noqa: E402
+from signyales_hub.serial_link import parse_stats_line  # noqa: E402
+
+with tempfile.TemporaryDirectory() as tmp:
+    sp = Path(tmp) / "settings.json"
+    check("link: default is usb when nothing is saved", rl.load_link(sp) == "usb")
+    rl.save_link("uart", sp)
+    check("link: saved choice is read back", rl.load_link(sp) == "uart")
+    rl.save_setting("other", 1, sp)
+    check("link: saving another setting keeps the link", rl.load_link(sp) == "uart")
+    sp.write_text('{"receiver_link": "wifi"}')
+    check("link: an unknown saved value falls back to usb", rl.load_link(sp) == "usb")
+    sp.write_text("not json")
+    check("link: an unreadable settings file falls back to usb", rl.load_link(sp) == "usb")
+    try:
+        rl.save_link("wifi", sp)
+        check("link: saving an unknown link is refused", False)
+    except ValueError:
+        check("link: saving an unknown link is refused", True)
+
+ports = [SimpleNamespace(device="/dev/ttyAMA0", vid=None),
+         SimpleNamespace(device="/dev/ttyUSB1", vid=0x10C4),     # a glove (CP210x)
+         SimpleNamespace(device="/dev/ttyUSB0", vid=0x1A86)]     # the receiver (CH340)
+check("link: the CH340 receiver is picked over a CP210x glove",
+      rl.find_usb_receiver(ports) == ("/dev/ttyUSB0", "CH340"), rl.find_usb_receiver(ports))
+check("link: no USB serial chip -> (None, None)",
+      rl.find_usb_receiver([SimpleNamespace(device="/dev/ttyAMA0", vid=None)]) == (None, None))
+check("link: GPIO ports are recognised as UART",
+      rl.is_uart_port("/dev/ttyAMA0") and rl.is_uart_port("/dev/serial0")
+      and not rl.is_uart_port("/dev/ttyUSB0") and not rl.is_uart_port("COM9"))
+
+c = HubConfig()
+check("link: config defaults (usb 115200, uart /dev/ttyAMA0 460800, nothing forced)",
+      (c.receiver_link, c.usb_baud, c.uart_port, c.uart_baud, c.serial_port, c.serial_baud)
+      == ("", 115200, "/dev/ttyAMA0", 460800, "", 0))
+c = HubConfig(receiver_link="usb")
+check("link: usb -> the CH340 port at 115200",
+      rl.resolve(c, ports=ports) == ("/dev/ttyUSB0", 115200, "usb"), rl.resolve(c, ports=ports))
+c = HubConfig(receiver_link="uart")
+check("link: uart -> /dev/ttyAMA0 at 460800",
+      rl.resolve(c, ports=ports) == ("/dev/ttyAMA0", 460800, "uart"), rl.resolve(c, ports=ports))
+c = HubConfig(serial_port="/dev/ttyAMA0")
+check("link: --port /dev/ttyAMA0 means uart", rl.resolve(c)[1:] == (460800, "uart"), rl.resolve(c))
+c = HubConfig(serial_port="COM9")
+check("link: --port COM9 means usb at 115200", rl.resolve(c) == ("COM9", 115200, "usb"), rl.resolve(c))
+c = HubConfig(serial_port="COM9", serial_baud=9600)
+check("link: --baud wins", rl.resolve(c)[1] == 9600)
+c = HubConfig(receiver_link="usb")
+try:
+    rl.resolve(c, ports=[])
+    check("link: no receiver on USB raises ReceiverNotFound", False)
+except rl.ReceiverNotFound as exc:
+    check("link: no receiver on USB raises ReceiverNotFound", "no receiver found on usb" in str(exc).lower())
+with tempfile.TemporaryDirectory() as tmp:
+    import os  # noqa: E402
+    old = os.environ.get("SIGNYALES_SETTINGS")
+    os.environ["SIGNYALES_SETTINGS"] = str(Path(tmp) / "s.json")
+    try:
+        rl.save_link("uart")
+        check("link: the saved choice is used when config leaves it empty",
+              rl.resolve(HubConfig(), ports=ports)[2] == "uart")
+    finally:
+        if old is None:
+            os.environ.pop("SIGNYALES_SETTINGS", None)
+        else:
+            os.environ["SIGNYALES_SETTINGS"] = old
+
+st = parse_stats_line("[stats] frames=5 | left: ratio=99.5% dropped=2 corrupt=1 | right: ratio=0.0% dropped=0 corrupt=0")
+check("stats: the receiver's [stats] line is parsed",
+      st is not None and st["frames"] == 5 and st["left_ratio"] == 99.5 and st["left_corrupt"] == 1, st)
+check("stats: other text is not a stats line", parse_stats_line("Setup complete. Waiting for gloves...") is None)
+
 # ------------------------------------------------- output (subtitle / speech)
 import io  # noqa: E402
 import contextlib  # noqa: E402

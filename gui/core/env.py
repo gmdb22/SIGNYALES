@@ -37,11 +37,24 @@ def pi_side_python() -> str:
     return str(candidate) if candidate.exists() else sys.executable
 
 
-def default_serial_port() -> str:
-    """The hub's configured port (/dev/ttyAMA0 on the Pi 5)."""
+def receiver_link() -> str:
+    """The saved receiver link, "usb" (default) or "uart" (receiver_link.py)."""
+    ensure_pi_side_on_path()
+    from signyales_hub.receiver_link import load_link
+    return load_link()
+
+
+def save_receiver_link(link: str):
+    ensure_pi_side_on_path()
+    from signyales_hub.receiver_link import save_link
+    save_link(link)
+
+
+def uart_port() -> str:
+    """The Pi's GPIO serial port for the UART option (/dev/ttyAMA0)."""
     ensure_pi_side_on_path()
     from signyales_hub.config import HubConfig
-    return HubConfig().serial_port
+    return HubConfig().uart_port
 
 
 def ensure_pi_side_on_path():

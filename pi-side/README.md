@@ -4,7 +4,7 @@ Layer 3 of the pipeline: gloves → receiver dongle → **Pi hub** → text/spee
 Target hardware: **Raspberry Pi 5 (4GB)**, Raspberry Pi OS Bookworm (64-bit).
 
 ```
-receiver UART -> parse frames -> extract features -> sliding window
+receiver (USB or UART) -> parse frames -> extract features -> sliding window
     -> TinyML inference -> debounce -> print text + speak
 ```
 
@@ -13,7 +13,8 @@ receiver UART -> parse frames -> extract features -> sliding window
 | File | Purpose |
 |---|---|
 | `signyales_hub/config.py` | All tunables: serial settings, window size, thresholds. |
-| `signyales_hub/serial_link.py` | Parses the receiver's UART frame format (mirrors `frame.h`). |
+| `signyales_hub/serial_link.py` | Parses the receiver's frame format (mirrors `frame.h`); on the USB link it asks for frames and reads the receiver's `[stats]` line. |
+| `signyales_hub/receiver_link.py` | Which link (USB default / UART), the saved setting, and finding the receiver's USB port. |
 | `signyales_hub/windowing.py` | Turns a frame stream into fixed-size windows for the model. |
 | `signyales_hub/model_runtime.py` | Loads a TFLite model, or degrades gracefully if none exists yet. |
 | `signyales_hub/gesture_debounce.py` | Turns flickering raw predictions into stable gesture events. |
@@ -29,7 +30,15 @@ receiver UART -> parse frames -> extract features -> sliding window
 
 ## Setup on the Raspberry Pi 5
 
-### 1. Enable the hardware UART
+### 1. Connect the receiver
+
+**USB cable (default, since 29 Oct 2026).** Plug the receiver into a Pi USB
+port with a USB-A to USB-C **data** cable. That's all: the Pi finds it by its
+CH340 USB chip (`/dev/ttyUSB0` or similar), and nothing below in this step is
+needed. To check: `python tools/live_view.py --duration 30` (about 50 Hz).
+
+**UART wires (option).** Choose "UART wires" in the GUI's Active mode
+(saved for the kiosk), or pass `--link uart`. Then do the rest of this step.
 
 **Pi 5-specific — do not trust `/dev/serial0`.** On earlier Pi models,
 `/dev/serial0` pointed to the GPIO header UART. On the **Pi 5**, it instead
@@ -67,7 +76,7 @@ the loopback test. See
 the full walkthrough.
 
 Wire the receiver dongle's TX/RX to the Pi's RX/TX (crossed) plus a shared
-ground, matching the pins set in the receiver's `config.h`.
+ground, matching the pins set in the receiver's `config.h`. (UART option only.)
 
 ### 2. Install dependencies
 
@@ -101,7 +110,8 @@ structure.
 ### 5. Run against real hardware
 
 ```
-python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 --model-dir model
+python -m signyales_hub.main --model-dir model              # saved link (USB by default)
+python -m signyales_hub.main --link uart --model-dir model  # UART wires, /dev/ttyAMA0
 ```
 
 Add `--subtitle` for large, fullscreen text output during a demo — this is
@@ -113,7 +123,7 @@ recording and a laptop mirror; see `gui/README.md`. That is an approved scope
 change; this console mode is unchanged.)
 
 ```
-python -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model --subtitle
+python -m signyales_hub.main --model-dir model --subtitle
 ```
 
 When `--subtitle` is on, logging is redirected to `signyales.log` instead

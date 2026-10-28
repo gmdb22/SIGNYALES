@@ -45,8 +45,9 @@ Pi, receiver and gloves can be switched on in any order:
 
 | Message | Meaning |
 |---|---|
-| Can't read the receiver on /dev/ttyAMA0 … Trying again every 5 s | The serial port can't be opened; the message says why (port off, permission, port in use) |
-| Waiting for the receiver … no data yet | The port opens but nothing arrives: receiver off or not wired |
+| Can't read the receiver (USB cable): no receiver found on USB … | Not plugged in, or a charge-only cable. Wired to the GPIO pins instead? Choose UART (below) |
+| Can't read the receiver (UART wires, /dev/ttyAMA0) … Trying again every 5 s | The serial port can't be opened; the message says why (port off, permission, port in use) |
+| Waiting for the receiver … no data yet | The port opens but nothing arrives: receiver off, or not wired / plugged in |
 | Receiver connected. Waiting for the gloves | Frames arrive but no glove is heard |
 | The left/right glove isn't heard | One glove off or out of range |
 | No trained model yet | No `model.tflite` in the model folder: glove lights still work |
@@ -55,9 +56,22 @@ Pi, receiver and gloves can be switched on in any order:
 
 Text is enlarged on big screens (up to 2x on a TV). Keys: **Esc** full
 screen on/off, **F2** (or the Full app button) opens the normal app,
-**Ctrl+Q** quits. Only one kiosk can run at a time (a lock in
-`~/.signyales_kiosk.lock`). Options: `--port`, `--model-dir`, `--no-speech`,
-`--share` (also send words to a laptop's Mirror), `--simulate`, `--windowed`.
+**F3** shows or hides the link numbers (frames/s, and per glove the received
+%, lost and damaged packets), **Ctrl+Q** quits. Only one kiosk can run at a
+time (a lock in `~/.signyales_kiosk.lock`). Options: `--link usb|uart`,
+`--port`, `--model-dir`, `--no-speech`, `--share` (also send words to a
+laptop's Mirror), `--simulate`, `--windowed`.
+
+### Receiver link: USB cable (default) or UART wires
+
+In **Active** mode (Recognize and Record tabs), **Receiver link** chooses how
+the receiver is connected: **USB cable** (one data cable; the port is found
+automatically, leave Port blank) or **UART wires** (GPIO pins, `/dev/ttyAMA0`).
+The choice is saved in `~/.signyales_settings.json` and used by the kiosk
+from its next retry and at every start. Under the glove lights, Active mode
+(and the laptop Mirror) shows the link numbers: on the USB link the
+receiver's own `[stats]` (received %, lost, damaged); on the UART link what
+the Pi works out from the gloves' packet numbers.
 
 To start it automatically when the Pi turns on, see
 `pi-side/deploy/README.md` ("Plug and play: kiosk at startup").

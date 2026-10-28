@@ -2,9 +2,10 @@
 Signyales GUI — laptop-side hardware helpers: serial ports, the ESP32 serial
 monitor, and the RECEIVER_MAC check.
 
-The serial monitor here is for the boards' USB debug output at 115200 baud
-(boot messages, calibration, the receiver's [stats] lines). It is NOT the
-receiver-to-Pi frame link, which uses separate pins at 460800 baud.
+The serial monitor here is for the boards' USB text output at 115200 baud
+(boot messages, calibration, the receiver's [stats] lines). The receiver
+only adds binary frames on USB while the Pi asks for them, so on a laptop
+the monitor shows text only.
 
 No Tk imports.
 """

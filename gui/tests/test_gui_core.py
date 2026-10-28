@@ -22,7 +22,7 @@ sys.path.insert(0, str(GUI))
 import numpy as np  # noqa: E402
 
 from core import env, hardware, mirror, recorder, tasks  # noqa: E402
-from core.live import LivePipeline  # noqa: E402
+from core.live import LinkStats, LivePipeline, link_stats_text  # noqa: E402
 from core.procs import ProcessRunner  # noqa: E402
 
 failures = []
@@ -78,6 +78,9 @@ laptop = {t.key for t in tasks.tasks_for(tasks.LAPTOP)}
 pi = {t.key for t in tasks.tasks_for(tasks.PI)}
 check("tasks: laptop has software, training and compile checks",
       {"roundtrip", "units", "pipeline", "native", "training", "compile_left_glove"} <= laptop)
+live = [t for t in tasks.tasks_for(tasks.PI) if t.key == "liveview"][0]
+check("tasks: the live data check uses the saved receiver link (no fixed --port)",
+      "--port" not in tasks.resolve_cmd(live), tasks.resolve_cmd(live))
 check("tasks: laptop has no Pi-only checks", not ({"loopback", "liveview", "freeze"} & laptop))
 check("tasks: Pi has UART loopback, live view, freeze and the software checks",
       {"roundtrip", "units", "pipeline", "loopback", "liveview", "freeze"} <= pi)
@@ -127,6 +130,32 @@ check("live: stop() ends the thread", not p.running)
 st = [e for e in events if e["type"] == "status"][0]
 check("live: status has fps, fresh % and flex values",
       st["fps"] > 0 and st["left_fresh_pct"] == 100 and len(st["right_flex"]) == 6)
+check("live: status has the Pi's link numbers (no lost packets in fake data, no receiver stats)",
+      st["left_received_pct"] == 100.0 and st["left_lost"] == 0 and st["right_lost"] == 0
+      and st["receiver"] is None, st)
+started = [e for e in events if e["type"] == "started"][0]
+check("live: started event says which link and port (empty for fake data)",
+      started.get("link") == "" and started.get("port") == "", started)
+
+ls = LinkStats()
+for seq in (10, 10, 11, 12, 15, 15, 16):      # 13 and 14 lost; repeats don't count
+    ls.update(seq)
+check("link stats: repeats ignored, a gap counts as lost",
+      (ls.expected, ls.lost, ls.received_pct) == (7, 2, 71.4), (ls.expected, ls.lost, ls.received_pct))
+ls.update(0)                                  # the glove restarted
+ls.update(1)
+check("link stats: a glove restart starts counting again",
+      (ls.expected, ls.lost) == (9, 2), (ls.expected, ls.lost))
+check("link stats: nothing seen yet = 0 %", LinkStats().received_pct == 0.0)
+rx = {"frames": 9, "left_ratio": 99.5, "left_dropped": 2, "left_corrupt": 1,
+      "right_ratio": 98.0, "right_dropped": 3, "right_corrupt": 0}
+check("link text: the receiver's own numbers when present (USB)",
+      link_stats_text({"receiver": rx, "left_received_pct": 50.0, "left_lost": 9,
+                       "right_received_pct": 50.0, "right_lost": 9}).startswith("Receiver: left 99.5%"))
+check("link text: the Pi's numbers otherwise (UART), and nothing for an old status event",
+      link_stats_text({"receiver": None, "left_received_pct": 97.5, "left_lost": 4,
+                       "right_received_pct": 100.0, "right_lost": 0}).startswith("Measured on the Pi: left 97.5%")
+      and link_stats_text({"fps": 50}) == "")
 
 # ---------------------------------------------------------------- recorder
 with tempfile.TemporaryDirectory() as tmp:
@@ -252,6 +281,9 @@ w, h, mx = display.window_size(800, 480)
 check("display: window fits a small screen and is maximized there", (w, h, mx) == (800, 440, True), (w, h, mx))
 check("display: normal laptop screen keeps the 1180x780 window",
       display.window_size(1920, 1080) == (1180, 780, False), display.window_size(1920, 1080))
+check("options: --link usb/uart parsed, default None (= the saved setting)",
+      display.parse_args(["--kiosk", "--link", "uart"]).link == "uart"
+      and display.parse_args(["--kiosk"]).link is None)
 o = display.parse_args(["--kiosk", "--simulate", "--port", "COM7", "--no-speech"])
 check("options: --kiosk --simulate --port --no-speech parsed",
       o.kiosk and o.simulate and o.port == "COM7" and o.no_speech and not o.share and o.model_dir is None)
@@ -268,6 +300,12 @@ check("kiosk errors: missing port, permission and busy port get plain advice",
       "doesn't exist" in display.friendly_error("Could not start: [Errno 2] No such file or directory", "/dev/ttyAMA0")
       and "dialout" in display.friendly_error("[Errno 13] Permission denied: '/dev/ttyAMA0'", "/dev/ttyAMA0")
       and "systemctl stop signyales" in display.friendly_error("Device or resource busy", "/dev/ttyAMA0"))
+check("kiosk errors: no receiver on USB says to plug it in or choose UART",
+      "data cable" in display.friendly_error("Could not start: no receiver found on USB (looked for ...)", None)
+      and "UART" in display.friendly_error("no receiver found on USB", None))
+check("kiosk errors: a missing USB port is not blamed on the UART setting",
+      "raspi" not in display.friendly_error("[Errno 2] No such file or directory: '/dev/ttyUSB0'", "/dev/ttyUSB0")
+      and "4.5" in display.friendly_error("[Errno 2] No such file or directory", "/dev/ttyAMA0"))
 
 # ---------------------------------------------------------------- hardware helpers
 check("mac: parsed from the MAC utility's line",

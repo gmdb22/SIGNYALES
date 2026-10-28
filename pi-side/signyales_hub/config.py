@@ -11,15 +11,25 @@ from dataclasses import dataclass
 
 @dataclass
 class HubConfig:
-    # --- Link to the receiver dongle ---
+    # --- Link to the receiver dongle (see receiver_link.py) ---
+    # "usb" (default since 29 Oct 2026): one USB data cable, port found
+    # automatically. "uart": jumper wires to the GPIO pins, uart_port.
+    # Empty = use the choice saved by the GUI (~/.signyales_settings.json),
+    # or "usb" if nothing is saved.
+    receiver_link: str = ""
+    usb_baud: int = 115200     # MUST match USB_BAUD in the receiver's config.h
     # Pi 5-specific correction: unlike earlier Pi models, /dev/serial0 on
     # the Pi 5 points to a separate 3-pin debug UART connector, NOT the
     # GPIO14/15 header pins we actually wire the receiver to. Use
     # /dev/ttyAMA0 directly instead. Verify this with a loopback test
     # before trusting it (see docs/testing_handoff/ for the exact steps) —
     # do not assume based on the device file simply existing.
-    serial_port: str = "/dev/ttyAMA0"
-    serial_baud: int = 460800  # MUST match PI_UART_BAUD in the receiver's config.h
+    uart_port: str = "/dev/ttyAMA0"
+    uart_baud: int = 460800    # MUST match PI_UART_BAUD in the receiver's config.h
+    # Only to force a port or baud (the tools' --port/--baud set these).
+    # Empty / 0 = chosen from receiver_link above.
+    serial_port: str = ""
+    serial_baud: int = 0
 
     # --- Feature window fed to the model ---
     # At 50 Hz (matching the glove/receiver sample rate), window_size_samples

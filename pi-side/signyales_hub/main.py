@@ -7,8 +7,9 @@ Target hardware: Raspberry Pi 5 (4GB), Raspberry Pi OS Bookworm (64-bit).
     receiver UART --> parse frames --> extract features --> sliding window
         --> TinyML inference --> debounce --> print text + speak
 
-Run against real hardware:
-    python -m signyales_hub.main --port /dev/ttyAMA0 --baud 460800 --model-dir model
+Run against real hardware (the receiver link is the saved GUI setting,
+USB by default, found automatically; --link uart uses /dev/ttyAMA0):
+    python -m signyales_hub.main --model-dir model
 
 Run without any hardware or trained model, to exercise the rest of
 the pipeline (useful in early sprints, per the proposal's Agile Scrum
@@ -21,7 +22,7 @@ import logging
 import sys
 
 from .config import HubConfig
-from .serial_link import SerialFrameReader, SimulatedFrameSource
+from .serial_link import SimulatedFrameSource, open_receiver
 from .windowing import WindowBuffer, extract_features
 from .model_runtime import GestureClassifier
 from .gesture_debounce import GestureDebouncer
@@ -36,6 +37,8 @@ def parse_args():
     p = argparse.ArgumentParser(description="Signyales Raspberry Pi 5 hub application")
     p.add_argument("--port", default=None, help="Serial port (default: config.py setting)")
     p.add_argument("--baud", type=int, default=None, help="Serial baud (default: config.py setting)")
+    p.add_argument("--link", choices=("usb", "uart"), default=None,
+                   help="Receiver link (default: the saved GUI setting, else usb)")
     p.add_argument("--model-dir", default=None, help="Directory with model.tflite/labels.json/scaler.json")
     p.add_argument("--simulate", action="store_true",
                     help="Use synthetic frames instead of a real serial link (no hardware needed)")
@@ -73,6 +76,8 @@ def main():
         cfg.serial_port = args.port
     if args.baud:
         cfg.serial_baud = args.baud
+    if args.link:
+        cfg.receiver_link = args.link
     if args.model_dir:
         cfg.model_dir = args.model_dir
 
@@ -92,7 +97,11 @@ def main():
         log.info("Running in --simulate mode: synthetic frames, no hardware required")
         source = SimulatedFrameSource(rate_hz=50)
     else:
-        source = SerialFrameReader(cfg.serial_port, cfg.serial_baud)
+        try:
+            source = open_receiver(cfg)
+        except Exception as exc:  # ReceiverNotFound, serial.SerialException
+            log.error("Could not open the receiver: %s", exc)
+            sys.exit(1)
 
     silent_in_model = sorted(set(cfg.silent_labels) & set(classifier.labels))
     if silent_in_model:

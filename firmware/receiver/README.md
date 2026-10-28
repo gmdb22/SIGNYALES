@@ -2,7 +2,8 @@
 
 Layer 2 of the pipeline: gloves → **receiver dongle** → Pi hub → TinyML → TTS.
 This board receives both gloves' ESP-NOW packets, checks them, and forwards a
-combined bimanual frame to the Raspberry Pi over UART at a fixed 50 Hz rate.
+combined bimanual frame to the Raspberry Pi at a fixed 50 Hz rate, over its
+USB cable (default since 29 Oct 2026) or the UART pins (option).
 
 ## What's in this folder
 
@@ -10,7 +11,7 @@ combined bimanual frame to the Raspberry Pi over UART at a fixed 50 Hz rate.
 |---|---|
 | `packet.h` | Copied verbatim from the glove firmware. Do not edit independently. |
 | `frame.h` | New contract: the combined frame + UART framing sent to the Pi. |
-| `config.h` | UART pins/baud, freshness window, forward rate. |
+| `config.h` | USB and UART link settings, freshness window, forward rate. |
 | `receiver_firmware.ino` | The firmware itself. |
 
 ## Build steps
@@ -21,10 +22,29 @@ combined bimanual frame to the Raspberry Pi over UART at a fixed 50 Hz rate.
 3. Flash `receiver_firmware.ino`. Open Serial Monitor at 115200 baud — on boot
    it prints its own MAC address. **Copy that into `RECEIVER_MAC` in both
    gloves' `config.h`** before flashing them (see the glove firmware README).
-4. Wire `PI_UART_TX_PIN` (default GPIO17) and `PI_UART_RX_PIN` (default
-   GPIO18) to the Raspberry Pi's UART RX and TX pins respectively (cross
-   them: receiver TX → Pi RX, receiver RX → Pi TX), plus a shared ground.
-5. On the Pi, enable the hardware UART (`raspi-config` → Interface Options →
+4. Connect it to the Pi. Two ways; the receiver firmware supports both at
+   once, and the choice is made on the Pi (GUI Active mode → "Receiver
+   link", saved for the kiosk; or `--link usb|uart` on the command line):
+
+   **USB cable (default).** One USB-A to USB-C **data** cable from a Pi USB
+   port to the receiver. It powers the receiver and carries the frames. The
+   Pi finds the receiver by its CH340 USB chip, so the port name doesn't
+   matter, and no raspi-config step or loopback test is needed.
+   How it works: the USB port always shows the text output (boot lines and
+   `[stats]`, 115200 baud, `USB_BAUD`). The Pi sends the letter `b` about
+   once a second; while those keep arriving the receiver also sends every
+   frame on USB, and about 3 s after they stop (`USB_FRAMES_TIMEOUT_MS`) it
+   goes back to text only. A laptop serial monitor never sends `b`, so on a
+   laptop it looks the same as before. The Pi skips the text between frames
+   (it never contains the `0xAA` sync byte) and reads the `[stats]` numbers
+   from it.
+
+   **UART wires (option).** Wire `PI_UART_TX_PIN` (default GPIO17) and
+   `PI_UART_RX_PIN` (default GPIO18) to the Raspberry Pi's UART RX and TX
+   pins respectively (cross them: receiver TX → Pi RX, receiver RX → Pi
+   TX), plus a shared ground; the USB cable then only gives power. Frames
+   are always sent here, whether or not USB is also used.
+5. UART option only: on the Pi, enable the hardware UART (`raspi-config` → Interface Options →
    Serial Port → login shell: no, hardware enabled: yes) and open it at
    **460800 baud** to match `PI_UART_BAUD`. **Pi 5-specific:** use
    `/dev/ttyAMA0`, not `/dev/serial0` — on the Pi 5, `/dev/serial0` points
@@ -81,8 +101,9 @@ anything on top of it.
 
 ## Debug stats
 
-Once per second, the USB debug console (separate from the Pi link) prints
-a line like:
+Once per second, the USB port prints a line like (on the USB link the Pi
+reads it too, between frames, and shows it in Active mode, on the laptop
+mirror and in the kiosk with F3):
 
 ```
 [stats] frames=1500 | left: ratio=98.7% dropped=13 corrupt=2 | right: ratio=99.1% dropped=9 corrupt=1
@@ -91,8 +112,9 @@ a line like:
 `ratio` is the packet delivery ratio computed from the highest sequence
 number seen so far minus dropped packets — this is the ESP-NOW-specific,
 per-hand figure for the proposal's Technical Performance Checklist.
-`pi-side/tools/receiver_link_logger.py` can tap this over a
-second USB cable and log it to CSV across a testing session.
+`pi-side/tools/receiver_link_logger.py` can log it to CSV across a testing
+session when the receiver's USB goes to a laptop (UART link to the Pi); on
+the USB link, `live_view.py` on the Pi prints the same numbers.
 
 This is a different (lower-level) measurement than the Pi hub's own
 packet delivery figures: this counts loss on the glove-to-receiver

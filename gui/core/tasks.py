@@ -79,12 +79,12 @@ def firmware_compile_tasks():
 def pi_hardware_tasks():
     py = pi_side_python()
     return [
-        Task("loopback", "UART loopback (jumper GPIO14-15)",
-             "Stage 5 step 3, receiver unplugged: jumper GPIO14 (pin 8) to GPIO15 (pin 10). Expects b'hello'. Remove the jumper afterwards.",
+        Task("loopback", "UART loopback (jumper GPIO14-15, UART option only)",
+             "Only for the UART option (the USB cable doesn't need it). Receiver unplugged: jumper GPIO14 (pin 8) to GPIO15 (pin 10). Expects b'hello'. Remove the jumper afterwards.",
              [py, "-c", UART_LOOPBACK], PI_SIDE, where=(PI,), timeout=10),
-        Task("liveview", "Live data check, 30 s (receiver wired, gloves on)",
-             "Stage 6: tools/live_view.py summary of frame rate, fresh %, finger ranges.",
-             [py, "tools/live_view.py", "--port", "/dev/ttyAMA0", "--duration", "30"], PI_SIDE,
+        Task("liveview", "Live data check, 30 s (receiver connected, gloves on)",
+             "Stage 6: tools/live_view.py summary of frame rate, fresh %, finger ranges, on the saved receiver link (USB by default).",
+             [py, "tools/live_view.py", "--duration", "30"], PI_SIDE,
              where=(PI,), timeout=60),
         Task("freeze", "Freeze manifest (model folder 'model')",
              "Records commit, model hashes and config before field testing.",

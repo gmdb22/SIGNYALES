@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 
 from signyales_hub.config import HubConfig  # noqa: E402
-from signyales_hub.serial_link import SerialFrameReader, SimulatedFrameSource  # noqa: E402
+from signyales_hub.serial_link import SimulatedFrameSource, open_receiver  # noqa: E402
 from signyales_hub.windowing import extract_features  # noqa: E402
 
 
@@ -108,7 +108,7 @@ def main():
               "useless for actually training a model.")
         source = SimulatedFrameSource(rate_hz=50)
     else:
-        source = SerialFrameReader(cfg.serial_port, cfg.serial_baud)
+        source = open_receiver(cfg)
 
     print(f"Recording gesture '{args.label}': {args.reps} repetitions -> {label_dir}")
     source_iter = iter(source)

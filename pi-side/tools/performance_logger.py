@@ -54,7 +54,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from signyales_hub.config import HubConfig  # noqa: E402
-from signyales_hub.serial_link import SerialFrameReader, SimulatedFrameSource  # noqa: E402
+from signyales_hub.serial_link import SimulatedFrameSource, open_receiver  # noqa: E402
 from signyales_hub.windowing import WindowBuffer, extract_features  # noqa: E402
 from signyales_hub.model_runtime import GestureClassifier  # noqa: E402
 from signyales_hub.gesture_debounce import GestureDebouncer  # noqa: E402
@@ -99,7 +99,7 @@ def main():
     if args.simulate:
         source = SimulatedFrameSource(rate_hz=50)
     else:
-        source = SerialFrameReader(cfg.serial_port, cfg.serial_baud)
+        source = open_receiver(cfg)
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)

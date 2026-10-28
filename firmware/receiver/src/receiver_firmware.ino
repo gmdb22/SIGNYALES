@@ -4,8 +4,8 @@
   Layer 2 of the Signyales pipeline. Receives glove_packet_t from both
   gloves over ESP-NOW, validates each packet's checksum, and every
   FORWARD_INTERVAL_MS assembles whatever the freshest known data from
-  each hand is into a combined_frame_t, which it forwards over a
-  dedicated UART link to the Raspberry Pi.
+  each hand is into a combined_frame_t, which it forwards to the
+  Raspberry Pi over USB (default) and/or the UART pins.
 
   This "sample-and-hold" approach — always forwarding on a fixed
   schedule using the latest available data per hand, rather than only
@@ -15,9 +15,12 @@
 
   Board: ESP32 Dev Module (or ESP32-S3 — same ESP-NOW APIs apply)
 
-  USB Serial (115200 baud) is used ONLY for human-readable debug
-  output. The link to the Pi runs on a separate hardware UART
-  (Serial1) so the two never interfere with each other.
+  Links to the Pi (see config.h):
+  - USB (Serial, 115200 baud): always prints the text [stats] line.
+    While the Pi keeps sending 'b' (about once a second), every frame
+    is also sent here. The Pi skips the text between frames (it never
+    contains the 0xAA sync byte) and reads the [stats] lines too.
+  - UART (Serial1, D17/D18, 460800 baud): every frame, always.
 */
 
 #include <WiFi.h>
@@ -41,6 +44,29 @@ uint32_t leftCorrupt = 0, rightCorrupt = 0;
 uint32_t framesForwarded = 0;
 
 uint32_t frameSeqCounter = 0;
+
+// When the Pi last asked for frames on USB (millis), and whether it ever did.
+uint32_t lastUsbRequestMs = 0;
+bool usbRequested = false;
+
+bool usbFramesOn() {
+  return usbRequested && (millis() - lastUsbRequestMs) < USB_FRAMES_TIMEOUT_MS;
+}
+
+// Reads what arrived on USB. 'b' = "send me frames" (the Pi sends it about
+// once a second). Anything else is ignored.
+void readUsbCommands() {
+  while (Serial.available() > 0) {
+    int c = Serial.read();
+    if (c == 'b') {
+      if (!usbFramesOn()) {
+        Serial.println("Pi connected on USB: sending frames here too.");
+      }
+      usbRequested = true;
+      lastUsbRequestMs = millis();
+    }
+  }
+}
 
 // ------------------------------------------------------------------
 // Packet handling (shared by both ESP-NOW callback signatures below)
@@ -114,7 +140,7 @@ void onDataRecv(const uint8_t* mac, const uint8_t* incomingData, int len) {
 // ------------------------------------------------------------------
 
 void setup() {
-  Serial.begin(115200);          // USB debug console
+  Serial.begin(USB_BAUD);        // USB: text, plus frames when the Pi asks
   delay(200);
 
   Serial1.begin(PI_UART_BAUD, SERIAL_8N1, PI_UART_RX_PIN, PI_UART_TX_PIN); // link to Pi
@@ -137,6 +163,7 @@ void setup() {
   // (see the comment on onDataRecv for why that's safe here anyway).
   esp_now_register_recv_cb((esp_now_recv_cb_t)onDataRecv);
 
+  Serial.println("Frames go to the UART pins always, and to USB while the Pi asks for them.");
   Serial.println("Setup complete. Waiting for gloves...");
 }
 
@@ -173,6 +200,10 @@ void forwardCombinedFrame() {
   };
   Serial1.write(header, sizeof(header));
   Serial1.write((uint8_t*)&frame, sizeof(frame));
+  if (usbFramesOn()) {
+    Serial.write(header, sizeof(header));
+    Serial.write((uint8_t*)&frame, sizeof(frame));
+  }
 
   framesForwarded++;
 
@@ -210,6 +241,8 @@ void printDebugStats() {
 void loop() {
   static uint32_t lastForward = 0;
   static uint32_t lastStats = 0;
+
+  readUsbCommands();
 
   uint32_t now = millis();
 

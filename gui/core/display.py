@@ -60,7 +60,10 @@ def parse_args(argv=None):
     p.add_argument("--simulate", action="store_true",
                    help="With --kiosk: fake glove data instead of the receiver (demo/testing).")
     p.add_argument("--port", default=None,
-                   help="Serial port of the receiver (default: config.py, /dev/ttyAMA0 on the Pi 5).")
+                   help="Serial port of the receiver (default: found by the receiver link).")
+    p.add_argument("--link", choices=("usb", "uart"), default=None,
+                   help="Receiver link: usb (one data cable) or uart (GPIO wires, /dev/ttyAMA0). "
+                        "Default: the choice saved in Active mode, else usb.")
     p.add_argument("--model-dir", default=None,
                    help="Model folder (default: pi-side/model).")
     p.add_argument("--no-speech", action="store_true", help="With --kiosk: subtitles only, no speech.")
@@ -119,9 +122,16 @@ class SingleInstance:
 def friendly_error(message: str, port: str) -> str:
     """Turns the usual serial-port errors into what to do about them."""
     m = message.lower()
+    port = port or "the receiver's port"
+    if "no receiver found on usb" in m:
+        return ("no receiver found on USB. Plug it into a Pi USB port with a data cable "
+                "(not a charge-only one). Wired to the GPIO pins instead? Choose UART in the "
+                "full app (F2, Active mode)")
     if "no such file" in m or "could not find" in m or "filenotfound" in m:
-        return (f"{port} doesn't exist. On the Pi, the serial port has to be turned on "
-                "(flashing kit, Raspberry Pi step 4.5); elsewhere, check --port")
+        if str(port).startswith("/dev/ttyAMA"):
+            return (f"{port} doesn't exist. For the UART option the Pi's serial port has to be "
+                    "turned on (flashing kit, Raspberry Pi step 4.5); or choose USB")
+        return f"{port} doesn't exist. Is the receiver still plugged in? Elsewhere, check --port"
     if "permission denied" in m:
         return (f"no permission to use {port}. Add this user to the 'dialout' group "
                 "(sudo usermod -aG dialout $USER), then log out and back in")

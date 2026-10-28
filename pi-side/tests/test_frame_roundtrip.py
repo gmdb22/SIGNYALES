@@ -103,6 +103,70 @@ def check_reader_resync(payload):
     assert got == 300, f"bogus length marker swallowed frames: parsed {got}/300"
 
 
+class _FakeUsbSerial(_FakeSerial):
+    """Like _FakeSerial, plus write() (the USB link sends frame requests)."""
+
+    def __init__(self, data, chunk=103):
+        super().__init__(data, chunk)
+        self.written = bytearray()
+        self.writes = 0
+
+    def write(self, data):
+        self.written.extend(data)
+        self.writes += 1
+        return len(data)
+
+
+def check_reader_usb(payload):
+    """USB link: the reader asks for frames, skips the receiver's text
+    between frames, and keeps the latest [stats] line."""
+    framed = bytes([0xAA, 0x55, FRAME_SIZE & 0xFF, FRAME_SIZE >> 8]) + payload
+    boot = (b"rst:0x1 (POWERON_RESET),boot:0x13\r\nSignyales receiver dongle starting...\r\n"
+            b"Setup complete. Waiting for gloves...\r\n")
+    stats1 = b"[stats] frames=10 | left: ratio=90.0% dropped=1 corrupt=0 | right: ratio=0.0% dropped=0 corrupt=0\r\n"
+    stats2 = b"[stats] frames=60 | left: ratio=99.5% dropped=2 corrupt=1 | right: ratio=98.0% dropped=3 corrupt=4\r\n"
+    stream = boot + stats1 + framed * 150 + b"Pi connected on USB: sending frames here too.\r\n" + stats2 + framed * 150
+
+    reader = SerialFrameReader.__new__(SerialFrameReader)
+    reader._ser = _FakeUsbSerial(stream, chunk=37)   # odd chunks split text and frames
+    reader.request_frames = True
+    frames = []
+    try:
+        for frame in reader:
+            frames.append(frame)
+    except _EndOfData:
+        pass
+    assert len(frames) == 300, f"USB stream with text between frames: parsed {len(frames)}/300"
+    assert bytes(reader._ser.written[:1]) == b"b", "the reader did not ask the receiver for frames"
+    st = reader.receiver_stats
+    assert st is not None and st["frames"] == 60, f"latest [stats] line not kept: {st}"
+    assert (st["left_ratio"], st["left_dropped"], st["left_corrupt"]) == (99.5, 2, 1), st
+    assert (st["right_ratio"], st["right_dropped"], st["right_corrupt"]) == (98.0, 3, 4), st
+    assert reader.receiver_stats_at is not None
+
+    # The request is repeated (every REQUEST_EVERY_S; 0 here = every read).
+    reader = SerialFrameReader.__new__(SerialFrameReader)
+    reader._ser = _FakeUsbSerial(framed * 20)
+    reader.request_frames = True
+    reader.REQUEST_EVERY_S = 0.0
+    try:
+        for _ in reader:
+            pass
+    except _EndOfData:
+        pass
+    assert reader._ser.writes > 1, "the frame request was not repeated"
+
+    # UART link: nothing is ever written.
+    reader = SerialFrameReader.__new__(SerialFrameReader)
+    reader._ser = _FakeUsbSerial(framed * 5)
+    try:
+        for _ in reader:
+            pass
+    except _EndOfData:
+        pass
+    assert reader._ser.writes == 0, "the UART reader wrote to the receiver"
+
+
 def main():
     payload, expected = build_test_frame()
     assert len(payload) == FRAME_SIZE, (
@@ -126,9 +190,11 @@ def main():
     assert parse_frame(bytes(corrupted)) is None, "Corrupted payload was NOT rejected"
 
     check_reader_resync(payload)
+    check_reader_usb(payload)
 
     print("PASS: frame format round-trips correctly, checksum validation works, "
-          "and the reader resynchronizes past a bogus length field.")
+          "the reader resynchronizes past a bogus length field, and on the USB link it "
+          "asks for frames, skips the receiver's text and reads its [stats] line.")
 
 
 if __name__ == "__main__":

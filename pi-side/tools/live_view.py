@@ -9,12 +9,14 @@ and responds to real hand movement BEFORE collecting training data.
 Why it exists: `python -m signyales_hub.main` prints nothing per frame when
 no model is loaded, so a healthy link and a dead link look identical.
 
-Read-only: does not change any file. Same serial settings as the hub
-(config.py defaults: /dev/ttyAMA0 @ 460800).
+Read-only: does not change any file. Same link as the hub: the receiver's
+USB cable by default (found automatically), or the UART pins (/dev/ttyAMA0)
+if that is the saved choice or --link uart / --port /dev/ttyAMA0 is given.
+On the USB link it also prints the receiver's own [stats] numbers.
 
-Usage (Pi bash, from pi-side/, venv active):
-    python tools/live_view.py --port /dev/ttyAMA0
-    python tools/live_view.py --port /dev/ttyAMA0 --duration 30
+Usage (Pi bash, from pi-side/, venv active; works the same on the laptop):
+    python tools/live_view.py --duration 30               # saved link (USB by default)
+    python tools/live_view.py --link uart --duration 30   # GPIO wires, /dev/ttyAMA0
     python tools/live_view.py --simulate --duration 3     # tool self-test only
 
 Press Ctrl+C to stop; a summary is printed at the end.
@@ -30,8 +32,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from signyales_hub.config import HubConfig  # noqa: E402
+from signyales_hub.receiver_link import describe  # noqa: E402
 from signyales_hub.serial_link import (  # noqa: E402
-    FLEX_NAMES, FLEX_PER_GLOVE, SerialFrameReader, SimulatedFrameSource)
+    FLEX_NAMES, FLEX_PER_GLOVE, SimulatedFrameSource, open_receiver)
 
 LOSS_AFTER_S = 2.0  # a hand with no fresh data for this long counts as "lost"
 FLEX_SPREAD_WARN = 200  # counts (0-4095 scale). Heuristic, not from the proposal.
@@ -118,6 +121,8 @@ def main():
     p = argparse.ArgumentParser(description="Live view of frames arriving at the Pi")
     p.add_argument("--port", default=None)
     p.add_argument("--baud", type=int, default=None)
+    p.add_argument("--link", choices=("usb", "uart"), default=None,
+                   help="Receiver link (default: the saved GUI setting, else usb)")
     p.add_argument("--interval", type=float, default=0.5, help="Seconds between printed lines")
     p.add_argument("--duration", type=float, default=0.0, help="Stop after N seconds (0 = until Ctrl+C)")
     p.add_argument("--simulate", action="store_true", help="Test the TOOL itself with synthetic data")
@@ -128,17 +133,19 @@ def main():
         cfg.serial_port = args.port
     if args.baud:
         cfg.serial_baud = args.baud
+    if args.link:
+        cfg.receiver_link = args.link
 
     if args.simulate:
         print("NOTE: --simulate = random synthetic data. Tool self-test only, not a hardware result.")
         source = SimulatedFrameSource(rate_hz=50)
     else:
         try:
-            source = SerialFrameReader(cfg.serial_port, cfg.serial_baud)
-        except Exception as exc:  # serial.SerialException etc.
-            print(f"Could not open {cfg.serial_port} @ {cfg.serial_baud}: {exc}")
+            source = open_receiver(cfg)
+        except Exception as exc:  # serial.SerialException, ReceiverNotFound etc.
+            print(f"Could not open the receiver: {exc}")
             sys.exit(1)
-        print(f"Listening on {cfg.serial_port} @ {cfg.serial_baud} baud (Ctrl+C to stop)")
+        print(f"Listening on {describe(source.link, source.port)} (Ctrl+C to stop)")
 
     left, right = HandStats(), HandStats()
     events = LinkEvents()
@@ -156,7 +163,7 @@ def main():
             ref = state["last_frame_t"] if state["last_frame_t"] is not None else t0
             if time.monotonic() - ref > NO_DATA_WARN_S:
                 print(f"  !! No frames for {time.monotonic() - ref:.0f}s — check receiver power, "
-                      f"UART wiring (TX/RX crossed), port and baud.")
+                      f"the cable (USB: a data cable; UART: TX/RX crossed), port and baud.")
 
     threading.Thread(target=watchdog, daemon=True).start()
 
@@ -183,6 +190,11 @@ def main():
                 print(f"t={now - t0:6.1f}s  rate={rate:5.1f} Hz  frame_seq={frame['frame_seq']}")
                 print(fmt_hand("L", frame["left"], frame["left_valid"]))
                 print(fmt_hand("R", frame["right"], frame["right_valid"]))
+                rx = getattr(source, "receiver_stats", None)
+                if rx:
+                    print(f"  receiver: left {rx['left_ratio']:.1f}% received ({rx['left_dropped']} lost, "
+                          f"{rx['left_corrupt']} damaged) | right {rx['right_ratio']:.1f}% "
+                          f"({rx['right_dropped']} lost, {rx['right_corrupt']} damaged)")
                 last_print = now
                 frames_at_last_print = state["frames"]
 

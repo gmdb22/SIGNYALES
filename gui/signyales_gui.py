@@ -121,9 +121,10 @@ class App(tk.Tk):
             self.set_fullscreen(True)
         self.bind("<Escape>", lambda e: self._toggle_fullscreen())
         self.bind("<F2>", lambda e: self.open_full_app())
+        self.bind("<F3>", lambda e: self.view.toggle_stats() if self.view is not None else None)
         o = self.options
         self.view = KioskView(self, self, port=o.port, model_dir=o.model_dir, simulate=o.simulate,
-                              speak=not o.no_speech, share=o.share)
+                              speak=not o.no_speech, share=o.share, link=o.link)
         self.view.pack(fill="both", expand=True)
 
     def open_full_app(self):
@@ -133,6 +134,7 @@ class App(tk.Tk):
         self.kiosk = False
         self.unbind("<Escape>")
         self.unbind("<F2>")
+        self.unbind("<F3>")
         if self.view is not None:
             self.view.shutdown()
             self.view.destroy()

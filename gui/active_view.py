@@ -13,7 +13,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from core import hardware, mirror, recorder, tasks
-from core.env import IS_WINDOWS, PI_SIDE, default_serial_port, find_tool, is_raspberry_pi
+from core.env import (IS_WINDOWS, PI_SIDE, find_tool, is_raspberry_pi, receiver_link,
+                      save_receiver_link, uart_port)
 from core.live import LivePipeline, load_classifier, make_source
 from core.procs import ProcessRunner
 from widgets import MUTED, OK, BAD, FullscreenSubtitles, HandStatus, LogBox, SubtitlePanel
@@ -47,6 +48,8 @@ class PiActiveView(ttk.Frame):
         self.pipeline = None
         self.server = None
         self.recorder = None
+        # Receiver link, shared by both tabs and saved, so the kiosk uses it too.
+        self.link_var = tk.StringVar(value=receiver_link())
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=8, pady=8)
         self.recognize_tab = ttk.Frame(nb)
@@ -58,10 +61,34 @@ class PiActiveView(ttk.Frame):
 
     # ---------------------------------------------------------------- shared controls
     def _port_row(self, parent, row):
-        ttk.Label(parent, text="Serial port:").grid(row=row, column=0, sticky="w")
-        var = tk.StringVar(value=default_serial_port())
-        ttk.Entry(parent, textvariable=var, width=18).grid(row=row, column=1, sticky="w", padx=4)
+        """Receiver link (USB cable / UART wires) and an optional port. Returns the port variable."""
+        ttk.Label(parent, text="Receiver link:").grid(row=row, column=0, sticky="w")
+        box = ttk.Frame(parent)
+        box.grid(row=row, column=1, sticky="w", padx=4)
+        ttk.Radiobutton(box, text="USB cable", value="usb", variable=self.link_var,
+                        command=self._link_changed).pack(side="left")
+        ttk.Radiobutton(box, text="UART wires", value="uart", variable=self.link_var,
+                        command=self._link_changed).pack(side="left", padx=(6, 0))
+        ttk.Label(box, text="  Port:").pack(side="left")
+        var = tk.StringVar(value="")
+        ttk.Entry(box, textvariable=var, width=14).pack(side="left", padx=(2, 0))
+        ttk.Label(box, text="(blank = automatic)", foreground=MUTED).pack(side="left", padx=4)
         return var
+
+    def _link_changed(self):
+        link = self.link_var.get()
+        try:
+            save_receiver_link(link)
+        except OSError as exc:
+            messagebox.showerror("Not saved", f"Could not save the receiver link setting: {exc}")
+            return
+        where = (f"the UART wires on {uart_port()}" if link == "uart"
+                 else "the USB cable (port found automatically)")
+        msg = (f"Receiver link saved: {where}. Used from the next Start/Connect, "
+               "and by the kiosk when the Pi starts.")
+        for log in (getattr(self, "r_log", None), getattr(self, "k_log", None)):
+            if log is not None:
+                log.append(msg, "muted")
 
     def _start_pipeline(self, model_dir, on_event, simulate=False, port=None):
         if self.pipeline and self.pipeline.stopping:
@@ -69,12 +96,14 @@ class PiActiveView(ttk.Frame):
         if self.pipeline and self.pipeline.running:
             messagebox.showinfo("Already connected", "Already connected. Press Stop / Disconnect first.")
             return False
-        if not simulate and IS_WINDOWS and (port or default_serial_port()).startswith("/dev/"):
-            messagebox.showinfo("No gloves on this laptop",
-                                f"{port or default_serial_port()} is the Raspberry Pi's serial port; it doesn't "
-                                "exist on Windows. Tick 'Fake glove data' to try this screen without hardware.")
+        link = self.link_var.get()
+        if not simulate and IS_WINDOWS and (str(port).startswith("/dev/") or (link == "uart" and not port)):
+            messagebox.showinfo("No UART on this laptop",
+                                f"{port or uart_port()} is the Raspberry Pi's serial port; it doesn't exist "
+                                "on Windows. Choose 'USB cable' with the receiver plugged into this laptop, "
+                                "or tick 'Fake glove data' to try this screen without hardware.")
             return False
-        self.pipeline = LivePipeline(lambda: make_source(port=port, simulate=simulate),
+        self.pipeline = LivePipeline(lambda: make_source(port=port or None, simulate=simulate, link=link),
                                      lambda: load_classifier(model_dir),
                                      lambda e: self.app.call(on_event, e))
         self.pipeline.start()
@@ -149,6 +178,8 @@ class PiActiveView(ttk.Frame):
             self.server.publish(e)
         t = e["type"]
         if t == "started":
+            if e.get("port"):
+                self.r_log.append(f"Reading the receiver on {e['port']} ({e.get('link', '')} link).", "muted")
             if e["model"]:
                 self.r_state.configure(text="Running. Words: " + ", ".join(e["labels"]), foreground=OK)
                 self.r_subtitle.idle()
@@ -165,10 +196,14 @@ class PiActiveView(ttk.Frame):
                 self.app.speaker.say(e["label"])
         elif t == "error":
             self.r_log.append("ERROR: " + e["message"], "fail")
-            if "could not open" in e["message"].lower() or "no such file" in e["message"].lower():
-                self.r_log.append("Check the port (Pi 5: /dev/ttyAMA0) and that no other program "
-                                  "(e.g. the auto-start service) is using it: sudo systemctl stop signyales",
-                                  "muted")
+            m = e["message"].lower()
+            if "no receiver found on usb" in m:
+                self.r_log.append("Plug the receiver into a Pi USB port with a data cable, or choose "
+                                  "'UART wires' if it is wired to the GPIO pins.", "muted")
+            elif "could not open" in m or "no such file" in m or "busy" in m:
+                self.r_log.append("Check the receiver link and port, and that no other program "
+                                  "(the kiosk, or the auto-start service) is using it: "
+                                  "pkill -f signyales_gui.py; sudo systemctl stop signyales", "muted")
         elif t == "stopped":
             self.r_state.configure(text="Stopped.", foreground=MUTED)
             self.r_hands.reset()

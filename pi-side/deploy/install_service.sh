@@ -54,9 +54,10 @@ StartLimitIntervalSec=0
 Type=simple
 User=$RUN_USER
 WorkingDirectory=$INSTALL_DIR
-# /dev/ttyAMA0, not /dev/serial0 — on the Pi 5, serial0 points to a
-# separate debug connector, not the GPIO header this project wires to.
-ExecStart=$PYTHON_BIN -m signyales_hub.main --port /dev/ttyAMA0 --model-dir model
+# Receiver link: the choice saved in the GUI (~/.signyales_settings.json),
+# USB by default (found automatically). The UART option reads /dev/ttyAMA0,
+# not /dev/serial0: on the Pi 5, serial0 is a separate debug connector.
+ExecStart=$PYTHON_BIN -m signyales_hub.main --model-dir model
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

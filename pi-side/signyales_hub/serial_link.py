@@ -7,6 +7,7 @@ Python-side half of that contract — if the C struct changes, this
 must change to match, byte for byte.
 """
 
+import re
 import struct
 import time
 import random
@@ -44,6 +45,25 @@ FRAME_SIZE = struct.calcsize(FRAME_FMT)        # 103 bytes
 
 SYNC_BYTE_0 = 0xAA
 SYNC_BYTE_1 = 0x55
+
+# The receiver's once-a-second text line (receiver_firmware.ino). On the USB
+# link it arrives between frames; it never contains SYNC_BYTE_0 (not ASCII),
+# so it can't be mistaken for a frame.
+STATS_RE = re.compile(
+    r"\[stats\] frames=(\d+) \| left: ratio=([\d.]+)% dropped=(\d+) corrupt=(\d+) "
+    r"\| right: ratio=([\d.]+)% dropped=(\d+) corrupt=(\d+)"
+)
+
+
+def parse_stats_line(line):
+    """The receiver's [stats] line as a dict, or None if it isn't one."""
+    m = STATS_RE.search(line)
+    if not m:
+        return None
+    frames, lr, ld, lc, rr, rd, rc = m.groups()
+    return {"frames": int(frames),
+            "left_ratio": float(lr), "left_dropped": int(ld), "left_corrupt": int(lc),
+            "right_ratio": float(rr), "right_dropped": int(rd), "right_corrupt": int(rc)}
 
 
 def _unpack_glove(fields):
@@ -103,21 +123,84 @@ def parse_frame(payload: bytes):
 
 class SerialFrameReader:
     """
-    Reads frames from the real UART link to the receiver dongle.
+    Reads frames from the receiver dongle (USB or UART link).
     Iterate over an instance to get parsed frame dicts, one per
     successfully-decoded frame. Resynchronizes automatically if byte
     alignment is ever lost.
+
+    With request_frames=True (the USB link) it sends REQUEST_BYTE to the
+    receiver every REQUEST_EVERY_S seconds; the receiver only sends frames
+    on USB while these keep arriving, and goes back to text only about 3 s
+    after they stop. That also covers the receiver restarting (it starts in
+    text-only mode). Text between frames is read too: the latest [stats]
+    line is kept in receiver_stats (dict, see parse_stats_line) with the
+    time.monotonic() it arrived in receiver_stats_at.
     """
 
-    def __init__(self, port: str, baud: int, timeout: float = 1.0):
+    REQUEST_BYTE = b"b"
+    REQUEST_EVERY_S = 1.0
+    MAX_TEXT = 512
+
+    # Class-level defaults, so a reader built without __init__ (the tests
+    # do this to skip opening a real port) still works.
+    request_frames = False
+    port = ""
+    link = ""
+    receiver_stats = None
+    receiver_stats_at = None
+
+    def __init__(self, port: str, baud: int, timeout: float = 1.0, request_frames: bool = False,
+                 link: str = ""):
         import serial  # pyserial — imported lazily so --simulate mode
                         # doesn't require it to be installed
-        self._ser = serial.Serial(port, baud, timeout=timeout)
-        log.info("Opened serial link on %s @ %d baud", port, baud)
+        ser = serial.Serial()
+        ser.port, ser.baudrate, ser.timeout = port, baud, timeout
+        if request_frames:
+            # Keep the USB chip's DTR/RTS lines released when the port opens:
+            # on ESP32 dev boards they drive the reset and boot pins. (On some
+            # systems the board still restarts once; the requests recover it.)
+            ser.dtr = False
+            ser.rts = False
+        ser.open()
+        self._ser = ser
+        self.port, self.link, self.request_frames = port, link, request_frames
+        log.info("Opened serial link on %s @ %d baud%s", port, baud,
+                 " (asking the receiver for frames on USB)" if request_frames else "")
+
+    def close(self):
+        try:
+            self._ser.close()
+        except Exception:
+            pass
+
+    def _take_text(self, text, data):
+        """Collects the bytes between frames and reads complete text lines."""
+        text.extend(data)
+        while True:
+            nl = text.find(b"\n")
+            if nl == -1:
+                break
+            line = bytes(text[:nl]).decode("ascii", errors="ignore").strip()
+            del text[:nl + 1]
+            stats = parse_stats_line(line)
+            if stats is not None:
+                self.receiver_stats = stats
+                self.receiver_stats_at = time.monotonic()
+            elif line:
+                log.debug("receiver: %s", line)
+        if len(text) > self.MAX_TEXT:
+            del text[:-self.MAX_TEXT]
 
     def __iter__(self):
         buf = bytearray()
+        text = bytearray()
+        last_request = None
         while True:
+            if self.request_frames:
+                now = time.monotonic()
+                if last_request is None or now - last_request >= self.REQUEST_EVERY_S:
+                    self._ser.write(self.REQUEST_BYTE)
+                    last_request = now
             chunk = self._ser.read(max(1, self._ser.in_waiting or 1))
             if not chunk:
                 continue  # timeout with no data — just keep waiting
@@ -129,11 +212,13 @@ class SerialFrameReader:
                     # No sync marker at all yet — keep at most the last
                     # byte in case it's a split SYNC_BYTE_0.
                     if len(buf) > 1:
+                        self._take_text(text, buf[:-1])
                         del buf[:-1]
                     break
 
                 if sync_idx > 0:
-                    del buf[:sync_idx]  # drop garbage before the marker
+                    self._take_text(text, buf[:sync_idx])
+                    del buf[:sync_idx]  # drop garbage (or receiver text) before the marker
 
                 if len(buf) < 4:
                     break  # need the 2-byte length field too
@@ -199,3 +284,14 @@ class SimulatedFrameSource:
                 "right": self._fake_glove(1),
                 "checksum": 0,
             }
+
+
+def open_receiver(cfg, port=None, baud=None, link=None):
+    """
+    A SerialFrameReader for the receiver, on the link chosen by
+    receiver_link.resolve() (USB by default: found automatically and asked
+    for frames; UART: cfg.uart_port).
+    """
+    from .receiver_link import LINK_USB, resolve
+    port, baud, link = resolve(cfg, port=port, baud=baud, link=link)
+    return SerialFrameReader(port, baud, request_frames=(link == LINK_USB), link=link)

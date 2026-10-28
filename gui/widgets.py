@@ -15,6 +15,7 @@ from tkinter import font as tkfont
 from tkinter import scrolledtext, ttk
 
 from core.env import IS_WINDOWS, child_env
+from core.live import link_stats_text
 
 INK = "#1f2933"
 MUTED = "#5c6670"
@@ -133,8 +134,8 @@ class FullscreenSubtitles:
 
 
 class HandStatus(ttk.Frame):
-    """Per-glove light (fresh / stale / no data), fresh %, and one bar per flex
-    sensor (thumb, index, middle, ring, pinky, palm)."""
+    """Per-glove light (fresh / stale / no data), fresh %, one bar per flex
+    sensor (thumb, index, middle, ring, pinky, palm), and the link numbers."""
 
     def __init__(self, master):
         super().__init__(master)
@@ -145,13 +146,15 @@ class HandStatus(ttk.Frame):
             dot = tk.Canvas(f, width=14, height=14, highlightthickness=0)
             dot.create_oval(2, 2, 12, 12, fill=MUTED, outline="", tags="dot")
             dot.grid(row=0, column=0)
-            lbl = ttk.Label(f, text=f"{hand.title()} glove: no data", width=26)
+            lbl = ttk.Label(f, text=f"{hand.title()} glove: no data", width=30)
             lbl.grid(row=0, column=1, sticky="w", padx=4)
             bars = tk.Canvas(f, width=130, height=34, highlightthickness=0, background="#eef1f4")
             bars.grid(row=1, column=0, columnspan=2, sticky="w", pady=2)
             self.rows[hand] = (dot, lbl, bars)
         self.fps = ttk.Label(self, text="", foreground=MUTED)
         self.fps.grid(row=1, column=0, columnspan=2, sticky="w", padx=8)
+        self.link = ttk.Label(self, text="", foreground=MUTED, wraplength=420, justify="left")
+        self.link.grid(row=2, column=0, columnspan=2, sticky="w", padx=8)
 
     def update_status(self, st):
         for hand in ("left", "right"):
@@ -166,6 +169,7 @@ class HandStatus(ttk.Frame):
                 bars.create_rectangle(4 + i * 21, 32 - h, 20 + i * 21, 32, fill="#3d6a8a", outline="")
         self.fps.configure(text=f"{st.get('fps', 0)} frames/s (about 50 expected), "
                                 f"{st.get('frames', 0)} frames so far")
+        self.link.configure(text=link_stats_text(st))
 
     def reset(self):
         for hand in ("left", "right"):
@@ -173,6 +177,7 @@ class HandStatus(ttk.Frame):
             dot.itemconfigure("dot", fill=MUTED)
             lbl.configure(text=f"{hand.title()} glove: no data")
             bars.delete("all")
+        self.link.configure(text="")
         self.fps.configure(text="")
 
 
