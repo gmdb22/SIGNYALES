@@ -140,3 +140,23 @@ Commit `be7fa90`. Results from the terminal output seen during the session.
   push (reported done).
 - Not run yet: the receiver with the new firmware, the USB link on real hardware (CH340 on the
   Pi or Windows), the gloves after the rework. The hardware is with the assembler.
+
+## 2026-10-31
+
+- Commit `51b690f` (pre-flash fixes from a code review): accelerometer sent in g, a lock in the
+  receiver so a frame can't mix two samples, at most one "send failed" line a second, smoothing
+  filter reset after calibration, GUI MAC test accepts a real MAC.
+- First receiver-to-Pi tests on real hardware, gloves off: details and numbers in
+  `docs/Signyales_Receiver_Link_Test_2026-10-31.md`. Receiver re-flashed (new firmware boots, 50
+  frames/s). UART loopback on the Pi: `b'hello'`. USB on the laptop: 49.9 Hz, no restart. UART on
+  the Pi: 49.9 Hz. USB on the Pi: 50 Hz after a ~1.2 s receiver restart when the port opens
+  (normal on Linux, recovers by itself). Both links pass; USB stays the default.
+- Glove hardware checks: neither glove has the rework yet. Left glove: starts and flashes now,
+  but the MPU6050 has no power and pinky/palm/7th sensor are still on IO25-IO27. Right glove: no
+  IO12 boot problem any more, but brownout resets while the MPU6050 is connected (starts fine
+  without it); later it stopped answering uploads (unresolved). Message with the usable pins and
+  fixes sent to the hardware assembler.
+- Found and fixed: `live_view.py` could cut off its own summary with a `KeyboardInterrupt` at the
+  end of a `--duration` run.
+- Not run yet: the links with gloves sending, longer runs, the kiosk on the Pi with real data.
+

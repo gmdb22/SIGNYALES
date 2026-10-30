@@ -154,11 +154,20 @@ def main():
     t0 = time.monotonic()
     print(f"Started at {clock(t0, t0, wall0)}")
 
+    stop_lock = threading.Lock()
+
     def watchdog():
         while not state["stop"]:
             time.sleep(1.0)
-            if args.duration and time.monotonic() - t0 >= args.duration:
-                _thread.interrupt_main()  # stops the loop even if no frames arrive
+            now_w = time.monotonic()
+            if args.duration and now_w - t0 >= args.duration:
+                # While frames arrive, the main loop stops by itself at --duration.
+                # Only interrupt it if it is stuck waiting for data, and never once
+                # it has finished (that used to cut off the summary).
+                last = state["last_frame_t"]
+                with stop_lock:
+                    if not state["stop"] and (last is None or now_w - last > 1.0):
+                        _thread.interrupt_main()
                 return
             ref = state["last_frame_t"] if state["last_frame_t"] is not None else t0
             if time.monotonic() - ref > NO_DATA_WARN_S:
@@ -203,7 +212,8 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        state["stop"] = True
+        with stop_lock:
+            state["stop"] = True
 
     events.finish(time.monotonic())
     elapsed = max(time.monotonic() - t0, 1e-9)
