@@ -45,6 +45,11 @@ uint32_t framesForwarded = 0;
 
 uint32_t frameSeqCounter = 0;
 
+// Guards leftPacket/rightPacket and their receive times. The ESP-NOW
+// callback (Wi-Fi task) writes them while loop() copies them into a frame;
+// without this a frame could carry half of one sample and half of the next.
+portMUX_TYPE packetMux = portMUX_INITIALIZER_UNLOCKED;
+
 // When the Pi last asked for frames on USB (millis), and whether it ever did.
 uint32_t lastUsbRequestMs = 0;
 bool usbRequested = false;
@@ -75,8 +80,8 @@ void readUsbCommands() {
 void handleIncomingPacket(const uint8_t* data, int len) {
   if (len != sizeof(glove_packet_t)) {
     // Wrong size means either corruption or a stray sender — either
-    // way, this is not a frame we can trust. Count it against
-    // whichever side it claims to be, if that field is even readable.
+    // way, this is not a packet we can trust. It is dropped without
+    // being counted (its glove_id can't be trusted either).
     return;
   }
 
@@ -92,6 +97,7 @@ void handleIncomingPacket(const uint8_t* data, int len) {
 
   uint32_t now = millis();
 
+  portENTER_CRITICAL(&packetMux);
   if (pkt.glove_id == GLOVE_ID_LEFT) {
     if (lastLeftSeq >= 0) {
       int32_t gap = (int32_t)(pkt.seq - (uint32_t)lastLeftSeq) - 1;
@@ -111,6 +117,7 @@ void handleIncomingPacket(const uint8_t* data, int len) {
     rightReceivedAt = now;
     rightEverSeen = true;
   }
+  portEXIT_CRITICAL(&packetMux);
   // Unknown glove_id values are silently ignored — defensive against
   // a misconfigured third device ever sending to this receiver.
 }
@@ -180,15 +187,21 @@ void forwardCombinedFrame() {
   frame.frame_seq = frameSeqCounter++;
   frame.frame_timestamp_ms = now;
 
-  frame.left_valid = (leftEverSeen && (now - leftReceivedAt) <= FRESH_WINDOW_MS) ? 1 : 0;
-  frame.right_valid = (rightEverSeen && (now - rightReceivedAt) <= FRESH_WINDOW_MS) ? 1 : 0;
+  // Copy both hands under the lock (see packetMux), then work on the copy.
+  portENTER_CRITICAL(&packetMux);
+  bool leftSeen = leftEverSeen, rightSeen = rightEverSeen;
+  uint32_t leftAt = leftReceivedAt, rightAt = rightReceivedAt;
+  frame.left = leftPacket;
+  frame.right = rightPacket;
+  portEXIT_CRITICAL(&packetMux);
+
+  frame.left_valid = (leftSeen && (now - leftAt) <= FRESH_WINDOW_MS) ? 1 : 0;
+  frame.right_valid = (rightSeen && (now - rightAt) <= FRESH_WINDOW_MS) ? 1 : 0;
 
   // Always include the last known data for each side, even if stale —
   // the Pi decides what to do with stale data (e.g. hold last gesture,
   // or flag the frame as unreliable), rather than the receiver having
   // to guess on its behalf.
-  frame.left = leftPacket;
-  frame.right = rightPacket;
 
   frame.checksum = compute_frame_checksum(&frame);
 

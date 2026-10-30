@@ -312,8 +312,11 @@ check("mac: parsed from the MAC utility's line",
       hardware.parse_mac("MAC Address: 24:6f:28:ab:cd:ef") == "24:6F:28:AB:CD:EF")
 check("mac: no MAC in an ordinary line", hardware.parse_mac("Setup complete. Streaming...") is None)
 cfg_mac = hardware.read_config_mac()
-check("mac: reads RECEIVER_MAC from config.h", cfg_mac == hardware.PLACEHOLDER, cfg_mac)
-check("mac: placeholder is reported", "placeholder" in hardware.compare_mac("24:6F:28:AB:CD:EF", cfg_mac))
+# config.h has the placeholder in git, or your receiver's MAC once you paste it in (Stage 1b).
+check("mac: reads RECEIVER_MAC from config.h (placeholder or a real MAC)",
+      cfg_mac == hardware.PLACEHOLDER or bool(cfg_mac and hardware.parse_mac(cfg_mac) == cfg_mac), cfg_mac)
+check("mac: placeholder is reported",
+      "placeholder" in hardware.compare_mac("24:6F:28:AB:CD:EF", hardware.PLACEHOLDER))
 check("mac: match and mismatch verdicts",
       hardware.compare_mac("24:6F:28:AB:CD:EF", "24:6F:28:AB:CD:EF").startswith("OK")
       and hardware.compare_mac("24:6F:28:AB:CD:EF", "24:6F:28:AB:CD:E0").startswith("MISMATCH"))

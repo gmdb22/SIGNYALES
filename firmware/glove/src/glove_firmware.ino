@@ -58,6 +58,13 @@ bool filterInitialized = false;
 uint32_t seqCounter = 0;
 esp_now_peer_info_t peerInfo;
 
+// Standard gravity: Adafruit's acceleration (m/s²) divided by this = g.
+const float MS2_PER_G = 9.80665f;
+
+// Failed esp_now_send() calls since the last report (printed once a second).
+uint32_t sendFailures = 0;
+uint32_t lastFailureReport = 0;
+
 // ------------------------------------------------------------------
 // Calibration
 // ------------------------------------------------------------------
@@ -108,6 +115,9 @@ void runCalibrationRoutine() {
     delay(10);
   }
   saveCalibration();
+  // Start the smoothing filter fresh on the new scale, so the first
+  // readings after calibration don't ramp over from the old one.
+  filterInitialized = false;
   Serial.println("Calibration saved:");
   for (int i = 0; i < FLEX_SENSOR_COUNT; i++) {
     Serial.printf("  Sensor %d (%s): min=%u max=%u\n", i, flexNames[i], flexMin[i], flexMax[i]);
@@ -287,9 +297,11 @@ void loop() {
 
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
-  pkt.accel[0] = a.acceleration.x;
-  pkt.accel[1] = a.acceleration.y;
-  pkt.accel[2] = a.acceleration.z;
+  // Adafruit's getEvent() gives m/s²; the packet carries g (packet.h,
+  // windowing.py and the training scaler all assume g: about 1.0 at rest).
+  pkt.accel[0] = a.acceleration.x / MS2_PER_G;
+  pkt.accel[1] = a.acceleration.y / MS2_PER_G;
+  pkt.accel[2] = a.acceleration.z / MS2_PER_G;
   pkt.gyro[0]  = g.gyro.x * 180.0f / PI; // rad/s -> deg/s
   pkt.gyro[1]  = g.gyro.y * 180.0f / PI;
   pkt.gyro[2]  = g.gyro.z * 180.0f / PI;
@@ -298,6 +310,13 @@ void loop() {
 
   esp_err_t result = esp_now_send(RECEIVER_MAC, (uint8_t*)&pkt, sizeof(pkt));
   if (result != ESP_OK) {
-    Serial.println("esp_now_send failed for this sample.");
+    sendFailures++;
+  }
+  // At most one line a second about failed sends (it used to be one per
+  // sample, up to 50 a second).
+  if (sendFailures > 0 && now - lastFailureReport >= 1000) {
+    Serial.printf("esp_now_send failed %lu time(s) in the last second.\n", (unsigned long)sendFailures);
+    sendFailures = 0;
+    lastFailureReport = now;
   }
 }
