@@ -221,3 +221,15 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   date (pre-31 Oct, cut off one summary) and was updated.
 - Not run yet: range/interference runs, runs with the gloves worn, the gloves on their PCBs and batteries, real flex sensors and calibration. The PCB rework is
   still with the hardware assembler.
+
+## 2026-11-04 (morning): glove firmware robustness, not yet on hardware
+
+- Glove firmware: clears a stuck I2C bus before starting it, tries the IMU 5 times before halting,
+  restarts I2C and the IMU if 25 reads in a row fail while streaming, and measures the gyro's
+  resting offset for 1 s at start-up (subtracted from every sample, saved to flash; the saved one
+  is kept if the glove moved; `g` measures it again). Packet format unchanged.
+- Checked in an AI assistant's sandbox only: logic tests against a simulated MPU (offset measured
+  and subtracted, moving glove keeps the saved offset, 5 tries, stuck-SDA recovery, restart after
+  25 failed reads), the earlier IMU tests, and the frame round-trip test. The functions used were
+  checked against the ESP32 Arduino core 2.0.17 headers. Not compiled with PlatformIO yet, not run
+  on the boards.

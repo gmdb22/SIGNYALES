@@ -117,6 +117,24 @@ palm fully during that window. The captured min/max per sensor is saved to flash
 (NVS) and survives reboots — you only need to redo it if the sensors are
 replaced or a different wearer's flex range differs substantially.
 
+### Gyro resting offset (automatic at start-up)
+
+The MPU clones read a few deg/s on some axes while lying still. For 1 second
+after the IMU starts, the firmware averages the gyro and subtracts that offset
+from every sample, so a still glove reads about 0 deg/s. **Keep the glove still
+for the first couple of seconds after power-on.** If it moved, the firmware
+prints `Gyro offset: the glove moved ...` and keeps the last saved offset
+(0 the very first time). Send `g` over Serial with the glove still to measure
+it again; it is saved to flash like the flex calibration.
+
+### IMU start-up retries and bus recovery
+
+Before starting I2C the firmware clears a stuck bus (an MPU that kept its power
+while the ESP32 reset can hold SDA low). It tries the IMU 5 times before
+stopping at `FATAL: MPU6050 not found`, and if 25 reads in a row fail while
+streaming (0.5 s) it restarts I2C and the IMU (at most every 2 s), sending the
+last good values meanwhile.
+
 ## How this connects to the rest of the system
 
 - **Packet format (`packet.h`) must be copied verbatim into the receiver

@@ -81,6 +81,9 @@ what was found on the I2C bus) and send them to Claude.
 
 
 3.5 CALIBRATE EACH GLOVE (after every new flash of the glove firmware)
+Keep the glove still for the first 2 seconds after power-on: the firmware
+measures the gyro's resting offset then (line "Gyro offset: ..."). If it
+says the glove moved, send g with the glove still to measure it again.
 In the monitor, send c (GUI: the "Send 'c' (calibrate glove)" button).
 For 8 seconds, bend and straighten all 5 fingers and the palm repeatedly.
 It prints:
