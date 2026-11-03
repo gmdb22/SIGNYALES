@@ -160,3 +160,33 @@ Commit `be7fa90`. Results from the terminal output seen during the session.
   end of a `--duration` run.
 - Not run yet: the links with gloves sending, longer runs, the kiosk on the Pi with real data.
 
+## 2026-11-02 to 2026-11-03 (bare-board and MPU checks)
+
+Code at `01fe742`. The owner ran the checks; results from the pasted serial output and meter
+readings. The glove PCBs were not powered.
+
+- Both ESP32 boards taken out of the glove PCBs and tested bare with `glove_hw_check`
+  (laptop, GUI Hardware helper). Board L: uploads, `boot:0x13`, "starts normally", chip
+  ESP32-D0WD-V3 rev 3, 4 MB flash, no restarts while watched. Board R (the one that stopped
+  accepting uploads on 31 Oct): uploads normally without holding BOOT, starts normally. Both
+  boards are fine; the gloves' faults are on the PCBs.
+- One flex divider resistor measured: about 0.5 kΩ on the 200k range, bands yellow-violet-brown-gold,
+  i.e. still **470 Ω**, not 47 kΩ (which glove and which R was not noted). The other resistors
+  were not measured.
+- Both MPU boards checked unpowered (diode mode): no short; about 1.86 V one way (power LED glows),
+  about 0.61 V the other way, the same on both.
+- Each MPU wired alone to a bare board (VCC 3V3, GND, SDA IO21, SCL IO22; wiring confirmed with the
+  meter): both answer at 0x68 with **WHO_AM_I = 0x72**, a clone, not the genuine MPU6050 (0x68).
+  The Adafruit library in the glove firmware refuses that ID, so the glove would have stopped at
+  `MPU6050 not found` even with correct wiring.
+- With an MPU attached, both boards often reset with `Brownout detector was triggered`, mostly
+  while starting up; once started they usually kept running. Seen with both MPUs on board R and
+  with the left MPU on board L. Not seen with nothing attached. REASONED: a weak supply (the USB
+  cable or port is the first suspect); not yet tested with another cable.
+- Glove firmware changed to read the MPU directly over I2C (same settings and units, no library)
+  and to accept WHO_AM_I 0x68, 0x70, 0x71 and 0x72; `glove_hw_check` gained an `a` command that
+  reads the sensor the same way. Checked in a sandbox against a simulated sensor only; not yet
+  compiled with PlatformIO or run on hardware.
+- Not run yet: the `a` command on the real MPUs, the cable test for the brownouts, the other five
+  resistors and both PCBs' short and pin checks, the glove firmware with the new IMU code.
+
