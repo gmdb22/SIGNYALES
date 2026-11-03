@@ -39,8 +39,8 @@ PlatformIO terminal, from the SIGNYALES folder:
 
 What it prints first: the chip, the reason for the last reset, and an I2C
 scan (the motion sensor should be found on SDA=GPIO21 SCL=GPIO22 at 0x68,
-WHO_AM_I=0x68; if it shows up on GPIO12/GPIO14 instead, the IMU rework
-hasn't been done).
+WHO_AM_I=0x68, or 0x72 for the clone boards we have (both accepted); if it
+shows up on GPIO12/GPIO14 instead, the IMU rework hasn't been done).
 Then readings 4 times a second:
     J1 thumb, J2 index, J3 middle, J4 ring, J5 pinky (IO36), J6 palm (IO39),
     and the old pins J5/J6/J7 (IO25-IO27) for comparison.
@@ -50,6 +50,8 @@ Type a letter and press Enter (GUI: type it in the box next to Send):
     s   summary: low, high and spread of each sensor
     w   Wi-Fi on/off (old pins IO25-IO27 should stop changing when on)
     i   scan for the motion sensor again
+    a   read the motion sensor 8 times (flat and still: total about 1.00 g,
+        rotation near 0)
     p   pause / resume
 
 Do this sequence and copy ALL the output to Claude:

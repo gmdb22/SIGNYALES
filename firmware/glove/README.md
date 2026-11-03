@@ -30,7 +30,12 @@ actually built (October 2026) use different parts, so these are now:
   pinky IO36 (jumper from J5), palm IO39 (jumper from J6).
 - **IMU:** MPU6050 board marked "ITG/MPU" (GY-521 type) over I2C,
   SDA = IO21, SCL = IO22 after the rework (the schematic has IO12/IO14;
-  see the IO12 note below).
+  see the IO12 note below). Both boards on hand are **clones**: they
+  report `WHO_AM_I=0x72`, not the genuine MPU6050's 0x68 (checked 3 Nov
+  2026 with the hardware check). The Adafruit MPU6050 library refuses
+  them, so since 3 Nov the firmware reads the sensor directly over I2C
+  (same registers and settings, no library) and accepts the IDs in
+  `IMU_ACCEPTED_IDS` in `config.h` (0x68, 0x70, 0x71, 0x72).
 
 **Planned rework of each glove PCB (not done yet):**
 
@@ -80,21 +85,21 @@ In the monitor, type a letter and press Enter:
 | bend one finger (or the palm) at a time | Checks each J is plugged into the right sensor |
 | `w` | Turns Wi-Fi on or off. With it on, the old J5–J7 pins (ADC2) should stop changing, as in the real firmware; IO36/IO39 keep working. Press `r` after switching. |
 | `i` | Scans for the motion sensor again |
+| `a` | Reads the motion sensor 8 times, the same way the glove firmware does: acceleration in g and rotation in deg/s. Lying flat and still: total about 1.00 g, rotation near 0 |
 | `p` | Pauses or resumes the readings |
 
 If nothing at all appears after pressing the board's EN button, or it
 keeps restarting, the board is not starting (see the IO12 problem above).
-Flash the glove firmware back on afterwards. This program has not been
-run on the real gloves yet.
+Flash the glove firmware back on afterwards. Run on both gloves (31 Oct
+2026) and on both bare boards with each MPU board (3 Nov 2026); the `a`
+command was added after that and has not been run on hardware yet.
 
 ## Build steps
 
 1. In Arduino IDE, install board support for **esp32 by Espressif Systems**
    (Boards Manager) and select **ESP32 Dev Module**. (With PlatformIO,
    `platformio.ini` already selects it.)
-2. Install libraries via Library Manager: **Adafruit MPU6050** and
-   **Adafruit Unified Sensor** (installing the first will prompt for the
-   second as a dependency).
+2. No libraries to install (the motion sensor is read directly over I2C).
 3. Flash `get_mac_address/get_mac_address.ino` onto the **receiver** ESP32
    and copy the printed MAC address.
 4. Open `glove_firmware.ino`. In `config.h`:

@@ -66,6 +66,14 @@
 #define IMU_SCL_PIN   22
 #define IMU_I2C_ADDR  0x68   // MPU6050 default (0x69 if AD0 is pulled high)
 
+// WHO_AM_I values the firmware accepts. A genuine MPU6050 reports 0x68;
+// both MPU boards on hand report 0x72 (clone, checked 3 Nov 2026 with
+// glove_hw_check). 0x70 = MPU6500, 0x71 = MPU9250 (same registers used).
+// A board that answers with another value stops at "MPU6050 not found or
+// not usable"; add its value here only after glove_hw_check's 'a' command
+// shows sensible readings for it.
+#define IMU_ACCEPTED_IDS { 0x68, 0x70, 0x71, 0x72 }
+
 // ---------------------------------------------------------------
 // Receiver dongle MAC address.
 // Flash get_mac_address.ino onto the receiver ESP32 first, read the

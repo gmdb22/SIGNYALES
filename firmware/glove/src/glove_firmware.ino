@@ -10,9 +10,8 @@
   Flash this same sketch onto both gloves — only config.h's
   IS_LEFT_GLOVE/IS_RIGHT_GLOVE flag changes between the two builds.
 
-  Dependencies (install via Arduino Library Manager):
-    - Adafruit MPU6050
-    - Adafruit Unified Sensor
+  No extra libraries: the IMU is read directly over I2C (see the IMU
+  section below), so MPU6050-compatible clone chips work too.
 
   Board: ESP32 Dev Module (esp32dev; the glove PCB uses an
   ESP32-DevKitC-32E clone). Installed via Boards Manager: esp32 by
@@ -25,14 +24,11 @@
 #include <WiFi.h>
 #include <esp_now.h>
 #include <Wire.h>
-#include <Adafruit_MPU6050.h>
-#include <Adafruit_Sensor.h>
 #include <Preferences.h>
 
 #include "config.h"
 #include "packet.h"
 
-Adafruit_MPU6050 mpu;
 Preferences prefs;
 
 static_assert(FLEX_SENSOR_COUNT == FLEX_PER_GLOVE,
@@ -57,9 +53,6 @@ bool filterInitialized = false;
 
 uint32_t seqCounter = 0;
 esp_now_peer_info_t peerInfo;
-
-// Standard gravity: Adafruit's acceleration (m/s²) divided by this = g.
-const float MS2_PER_G = 9.80665f;
 
 // Failed esp_now_send() calls since the last report (printed once a second).
 uint32_t sendFailures = 0;
@@ -152,7 +145,7 @@ void warnAboutAdc2Pins() {
   }
 }
 
-// Called when mpu.begin() fails: reports what, if anything, answers on
+// Called when setupImu() fails: reports what, if anything, answers on
 // the I2C bus, so "not found" can be told apart from "a different chip".
 void reportImuProblem() {
   bool any = false;
@@ -165,7 +158,7 @@ void reportImuProblem() {
         Wire.beginTransmission(addr);
         Wire.write(0x75); // WHO_AM_I
         if (Wire.endTransmission(false) == 0 && Wire.requestFrom(addr, (uint8_t)1) == 1) {
-          Serial.printf(", WHO_AM_I=0x%02X (a genuine MPU6050 reports 0x68)", Wire.read());
+          Serial.printf(", WHO_AM_I=0x%02X (accepted: see IMU_ACCEPTED_IDS in config.h)", Wire.read());
         }
       }
       Serial.println();
@@ -175,6 +168,112 @@ void reportImuProblem() {
     Serial.printf("  No I2C device answered on SDA=GPIO%d, SCL=GPIO%d. Check the IMU wiring "
                   "and power.\n", IMU_SDA_PIN, IMU_SCL_PIN);
   }
+}
+
+// ------------------------------------------------------------------
+// IMU (MPU6050 or a register-compatible clone), read directly over I2C
+// ------------------------------------------------------------------
+// Until 3 Nov 2026 this used the Adafruit MPU6050 library, which refuses
+// any chip whose WHO_AM_I is not 0x68. Both MPU boards on hand report
+// 0x72 (a clone; seen with glove_hw_check on 3 Nov 2026), so the library
+// would stop at "MPU6050 not found" even with correct wiring. The
+// registers below are the same on the MPU6050 and the MPU65xx family.
+// Settings and units match what the library gave before: +-4 g,
+// +-500 deg/s, ~21 Hz low-pass; accel in g, gyro in deg/s.
+
+const uint8_t IMU_REG_SMPLRT_DIV    = 0x19;
+const uint8_t IMU_REG_CONFIG        = 0x1A;  // digital low-pass filter (gyro; accel too on MPU6050)
+const uint8_t IMU_REG_GYRO_CONFIG   = 0x1B;
+const uint8_t IMU_REG_ACCEL_CONFIG  = 0x1C;
+const uint8_t IMU_REG_ACCEL_CONFIG2 = 0x1D;  // accel low-pass, MPU65xx family only
+const uint8_t IMU_REG_ACCEL_XOUT_H  = 0x3B;  // 14 bytes: accel x,y,z, temp, gyro x,y,z
+const uint8_t IMU_REG_PWR_MGMT_1    = 0x6B;
+const uint8_t IMU_REG_WHO_AM_I      = 0x75;
+
+const uint8_t IMU_DLPF_21HZ   = 0x04;
+const uint8_t IMU_GYRO_500DPS = 0x08;    // FS_SEL = 1
+const uint8_t IMU_ACCEL_4G    = 0x08;    // AFS_SEL = 1
+const float IMU_ACCEL_LSB_PER_G   = 8192.0f;
+const float IMU_GYRO_LSB_PER_DPS  = 65.5f;
+
+const uint8_t imuAcceptedIds[] = IMU_ACCEPTED_IDS;
+
+// Failed IMU reads since the last report (printed at most once a second).
+uint32_t imuReadFailures = 0;
+uint32_t lastImuFailureReport = 0;
+
+bool imuWrite(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(IMU_I2C_ADDR);
+  Wire.write(reg);
+  Wire.write(value);
+  return Wire.endTransmission() == 0;
+}
+
+bool imuRead(uint8_t reg, uint8_t* buf, uint8_t len) {
+  Wire.beginTransmission(IMU_I2C_ADDR);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom((uint8_t)IMU_I2C_ADDR, len) != len) return false;
+  for (uint8_t i = 0; i < len; i++) buf[i] = Wire.read();
+  return true;
+}
+
+bool imuIdAccepted(uint8_t id) {
+  for (size_t i = 0; i < sizeof(imuAcceptedIds); i++) {
+    if (imuAcceptedIds[i] == id) return true;
+  }
+  return false;
+}
+
+// Wakes and configures the IMU. Returns false (with the reason printed)
+// if nothing answers, the chip ID isn't accepted, or a setting doesn't stick.
+bool setupImu() {
+  uint8_t id = 0;
+  if (!imuRead(IMU_REG_WHO_AM_I, &id, 1)) {
+    Serial.printf("IMU: nothing answers at 0x%02X on SDA=GPIO%d, SCL=GPIO%d.\n",
+                  IMU_I2C_ADDR, IMU_SDA_PIN, IMU_SCL_PIN);
+    return false;
+  }
+  if (!imuIdAccepted(id)) {
+    Serial.printf("IMU: WHO_AM_I=0x%02X is not in IMU_ACCEPTED_IDS (config.h).\n", id);
+    return false;
+  }
+  imuWrite(IMU_REG_PWR_MGMT_1, 0x80);  // reset
+  delay(100);
+  imuWrite(IMU_REG_PWR_MGMT_1, 0x01);  // wake, clock from the gyro PLL
+  delay(10);
+  imuWrite(IMU_REG_SMPLRT_DIV, 0x00);
+  imuWrite(IMU_REG_CONFIG, IMU_DLPF_21HZ);
+  imuWrite(IMU_REG_GYRO_CONFIG, IMU_GYRO_500DPS);
+  imuWrite(IMU_REG_ACCEL_CONFIG, IMU_ACCEL_4G);
+  if (id != 0x68) {
+    imuWrite(IMU_REG_ACCEL_CONFIG2, IMU_DLPF_21HZ);  // not a register on a genuine MPU6050
+  }
+
+  uint8_t gyroCfg = 0, accelCfg = 0;
+  if (!imuRead(IMU_REG_GYRO_CONFIG, &gyroCfg, 1) || !imuRead(IMU_REG_ACCEL_CONFIG, &accelCfg, 1) ||
+      (gyroCfg & 0x18) != IMU_GYRO_500DPS || (accelCfg & 0x18) != IMU_ACCEL_4G) {
+    Serial.printf("IMU: settings did not stick (GYRO_CONFIG=0x%02X, ACCEL_CONFIG=0x%02X).\n",
+                  gyroCfg, accelCfg);
+    return false;
+  }
+  Serial.printf("IMU: WHO_AM_I=0x%02X%s, +-4 g, +-500 deg/s.\n", id,
+                id == 0x68 ? " (MPU6050)" : " (compatible chip)");
+  return true;
+}
+
+// Reads one sample: accel in g, gyro in deg/s. Returns false if the
+// I2C read failed (the caller keeps the previous values).
+bool readImu(float* accel, float* gyro) {
+  uint8_t b[14];
+  if (!imuRead(IMU_REG_ACCEL_XOUT_H, b, sizeof(b))) return false;
+  for (int i = 0; i < 3; i++) {
+    int16_t a = (int16_t)((b[2 * i] << 8) | b[2 * i + 1]);
+    int16_t g = (int16_t)((b[8 + 2 * i] << 8) | b[8 + 2 * i + 1]);
+    accel[i] = a / IMU_ACCEL_LSB_PER_G;
+    gyro[i] = g / IMU_GYRO_LSB_PER_DPS;
+  }
+  return true;
 }
 
 // ------------------------------------------------------------------
@@ -258,14 +357,11 @@ void setup() {
   warnAboutAdc2Pins();
 
   Wire.begin(IMU_SDA_PIN, IMU_SCL_PIN);
-  if (!mpu.begin(IMU_I2C_ADDR)) {
-    Serial.println("FATAL: MPU6050 not found. Check wiring/I2C address. Halting.");
+  if (!setupImu()) {
+    Serial.println("FATAL: MPU6050 not found or not usable. Check wiring/I2C address. Halting.");
     reportImuProblem();
     while (true) delay(1000);
   }
-  mpu.setAccelerometerRange(MPU6050_RANGE_4_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-  mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
   loadCalibration();
   setupEspNow();
@@ -295,16 +391,23 @@ void loop() {
 
   readFlexSensors(pkt.flex_raw);
 
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-  // Adafruit's getEvent() gives m/s²; the packet carries g (packet.h,
-  // windowing.py and the training scaler all assume g: about 1.0 at rest).
-  pkt.accel[0] = a.acceleration.x / MS2_PER_G;
-  pkt.accel[1] = a.acceleration.y / MS2_PER_G;
-  pkt.accel[2] = a.acceleration.z / MS2_PER_G;
-  pkt.gyro[0]  = g.gyro.x * 180.0f / PI; // rad/s -> deg/s
-  pkt.gyro[1]  = g.gyro.y * 180.0f / PI;
-  pkt.gyro[2]  = g.gyro.z * 180.0f / PI;
+  // The packet carries accel in g (about 1.0 at rest) and gyro in deg/s,
+  // as packet.h, windowing.py and the training scaler assume. If a read
+  // fails, the previous sample's values are sent again.
+  static float lastAccel[3] = {0, 0, 0};
+  static float lastGyro[3] = {0, 0, 0};
+  if (!readImu(lastAccel, lastGyro)) {
+    imuReadFailures++;
+  }
+  if (imuReadFailures > 0 && now - lastImuFailureReport >= 1000) {
+    Serial.printf("IMU read failed %lu time(s) in the last second.\n", (unsigned long)imuReadFailures);
+    imuReadFailures = 0;
+    lastImuFailureReport = now;
+  }
+  for (int i = 0; i < 3; i++) {
+    pkt.accel[i] = lastAccel[i];
+    pkt.gyro[i] = lastGyro[i];
+  }
 
   pkt.checksum = compute_checksum(&pkt);
 

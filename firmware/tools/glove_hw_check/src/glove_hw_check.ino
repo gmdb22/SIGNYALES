@@ -17,6 +17,9 @@
     w   turn Wi-Fi on or off (shows which pins stop working while the
         glove transmits; the real firmware always has Wi-Fi on)
     i   scan the I2C bus again
+    a   read the motion sensor 8 times (acceleration in g, rotation in
+        deg/s), the same way the glove firmware does; lay the sensor flat
+        and still first
     p   pause or resume the readings
 
   Pins are from the KiCad schematic of the glove PCB (22 Oct 2026), except
@@ -91,10 +94,12 @@ void scanI2c() {
         Wire.write(0x75);  // WHO_AM_I register
         if (Wire.endTransmission(false) == 0 && Wire.requestFrom(addr, (uint8_t)1) == 1) {
           uint8_t who = Wire.read();
-          const char* kind = who == 0x68 ? "MPU6050 (what the glove firmware expects)"
-                           : who == 0x70 ? "MPU6500 (NOT accepted by the glove firmware's library)"
-                           : who == 0x71 ? "MPU9250 (NOT accepted by the glove firmware's library)"
-                           : "unknown chip (NOT accepted by the glove firmware's library)";
+          // Same list as IMU_ACCEPTED_IDS in firmware/glove/src/config.h.
+          const char* kind = who == 0x68 ? "MPU6050 (accepted by the glove firmware)"
+                           : who == 0x70 ? "MPU6500 (accepted by the glove firmware)"
+                           : who == 0x71 ? "MPU9250 (accepted by the glove firmware)"
+                           : who == 0x72 ? "MPU6050-compatible clone (accepted by the glove firmware)"
+                           : "unknown chip (NOT accepted by the glove firmware; check it with 'a')";
           Serial.printf(", WHO_AM_I=0x%02X = %s", who, kind);
         }
       }
@@ -102,6 +107,80 @@ void scanI2c() {
     }
     if (!found) Serial.printf("SDA=GPIO%d SCL=GPIO%d: nothing found\n", sda, scl);
   }
+  Wire.end();
+}
+
+// Reads the motion sensor the way the glove firmware does (same registers
+// and settings: +-4 g, +-500 deg/s): 8 samples, 0.25 s apart. Lying flat
+// and still, the total acceleration should be about 1.00 g and the
+// rotation close to 0 (a few deg/s of offset is normal).
+uint8_t imuAddr = 0;
+
+bool imuWrite(uint8_t reg, uint8_t value) {
+  Wire.beginTransmission(imuAddr);
+  Wire.write(reg);
+  Wire.write(value);
+  return Wire.endTransmission() == 0;
+}
+
+bool imuRead(uint8_t reg, uint8_t* buf, uint8_t len) {
+  Wire.beginTransmission(imuAddr);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(imuAddr, len) != len) return false;
+  for (uint8_t i = 0; i < len; i++) buf[i] = Wire.read();
+  return true;
+}
+
+void readImuSamples() {
+  Serial.println("--- Motion sensor readings (SDA=GPIO21 SCL=GPIO22) ---");
+  Wire.end();
+  Wire.begin(21, 22);
+  imuAddr = 0;
+  for (uint8_t addr = 0x68; addr <= 0x69; addr++) {
+    Wire.beginTransmission(addr);
+    if (Wire.endTransmission() == 0) { imuAddr = addr; break; }
+  }
+  if (!imuAddr) {
+    Serial.println("Nothing at 0x68 or 0x69 on GPIO21/22. Check the wiring and power.");
+    Wire.end();
+    return;
+  }
+  uint8_t who = 0;
+  imuRead(0x75, &who, 1);
+  imuWrite(0x6B, 0x80);   // reset
+  delay(100);
+  imuWrite(0x6B, 0x01);   // wake, clock from the gyro PLL
+  delay(10);
+  imuWrite(0x19, 0x00);   // sample rate divider
+  imuWrite(0x1A, 0x04);   // low-pass ~21 Hz
+  imuWrite(0x1B, 0x08);   // gyro +-500 deg/s
+  imuWrite(0x1C, 0x08);   // accel +-4 g
+  if (who != 0x68) imuWrite(0x1D, 0x04);  // accel low-pass, MPU65xx family only
+  uint8_t gyroCfg = 0, accelCfg = 0;
+  imuRead(0x1B, &gyroCfg, 1);
+  imuRead(0x1C, &accelCfg, 1);
+  Serial.printf("Address 0x%02X, WHO_AM_I=0x%02X, GYRO_CONFIG=0x%02X, ACCEL_CONFIG=0x%02X "
+                "(both should be 0x08)\n", imuAddr, who, gyroCfg, accelCfg);
+  delay(50);
+  for (int n = 0; n < 8; n++) {
+    uint8_t b[14];
+    if (!imuRead(0x3B, b, sizeof(b))) {
+      Serial.println("read failed");
+    } else {
+      float a[3], g[3];
+      for (int i = 0; i < 3; i++) {
+        a[i] = (int16_t)((b[2 * i] << 8) | b[2 * i + 1]) / 8192.0f;
+        g[i] = (int16_t)((b[8 + 2 * i] << 8) | b[8 + 2 * i + 1]) / 65.5f;
+      }
+      float total = sqrtf(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+      Serial.printf("accel g: x=%+5.2f y=%+5.2f z=%+5.2f  total=%4.2f | gyro deg/s: x=%+7.1f y=%+7.1f z=%+7.1f\n",
+                    a[0], a[1], a[2], total, g[0], g[1], g[2]);
+    }
+    delay(250);
+  }
+  Serial.println("(Flat and still: total about 1.00 and gyro near 0. Tilt or turn it and send 'a' "
+                 "again: the values should follow the movement.)");
   Wire.end();
 }
 
@@ -147,7 +226,7 @@ void setup() {
   setWifi(false);
   scanI2c();
   Serial.println("--- Flex readings, 0-4095 (Wi-Fi OFF). Bend one finger at a time to check "
-                 "each J is the right finger. Commands: s r w i p ---");
+                 "each J is the right finger. Commands: s r w i a p ---");
 }
 
 void loop() {
@@ -157,6 +236,7 @@ void loop() {
     else if (c == 'r') { resetRange(); Serial.println("--- low/high reset ---"); }
     else if (c == 'w') setWifi(!wifiOn);
     else if (c == 'i') scanI2c();
+    else if (c == 'a') readImuSamples();
     else if (c == 'p') { paused = !paused; Serial.println(paused ? "--- paused ---" : "--- resumed ---"); }
   }
 
