@@ -282,12 +282,13 @@ and `docs/No_Hardware_Verification_Status.docx`.
 receiver reaches the Pi at 50 Hz over both the USB cable and the UART wires
 (gloves off). Both ESP32 glove boards, taken out of the PCBs, run the glove
 firmware with their MPU6050 clones (WHO_AM_I 0x72) and reach the Pi over the UART
-wires at 50 Hz, 100% fresh, one glove at a time. Details:
+wires at 50 Hz, 100% fresh, one glove at a time (the right glove also for 5 minutes,
+and over the USB cable). Details:
 `docs/Signyales_Receiver_Link_Test_2026-10-31.md` and
 `docs/Signyales_Glove_Radio_Test_2026-11-04.md`.
 
 **Not run yet:** the gloves after the PCB rework (flex sensors, batteries),
-both gloves at once, the USB link with gloves sending, kiosk autostart with real
+both gloves at once, kiosk autostart with real
 data, the mirror over a real cable or Wi-Fi, recognition accuracy on real
 signing. Treat these as untested until
 the hardware test log says otherwise.

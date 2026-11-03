@@ -29,11 +29,14 @@ python tools/live_view.py --link uart --duration 20
 
 ## 3. Results: radio link, one glove at a time
 
-| # | Time | Glove sending | Frames in 20 s | Fresh | Outages > 2 s | Glove seq gaps (`live_view`) | Receiver `[stats]` | Label |
+| # | Time | Glove sending | Frames | Fresh | Outages > 2 s | Glove seq gaps (`live_view`) | Receiver `[stats]` | Label |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 04:22 | Board L + left MPU | 1000 (50.0 Hz) | Left **100.0%** | 0 | 1 | left dropped 0, corrupt 0 (read after the run, frames 11735–12585) | VERIFIED |
 | 2 | 04:39 | Board R + right MPU | 1000 (50.0 Hz) | Right **100.0%** | 0 | 3 | right dropped 0, corrupt 0 (read just before the run) | VERIFIED |
 | 3 | 04:41 | Board R + right MPU, tilted and turned by hand | 999 (49.9 Hz) | Right **100.0%** | 0 | 0 | — | VERIFIED |
+| 4 | before 04:59, **5 min** (UART) | Board R + right MPU, still | 15001 in 300 s (50.0 Hz) | Right **99.9%** | 0 | 25 | right dropped 0, corrupt 0 at about 124,000 frames since receiver boot (read at 05:01, covers the run) | VERIFIED |
+| 5 | 05:03, **USB link** (`--link usb`, `/dev/ttyUSB0`), 20 s | Board R + right MPU | 967 (48.3 Hz incl. start-up; 50.0 Hz after) | Right **100.0%** | 0 | 0 | `receiver:` line on the Pi: right 100.0% received, 0 lost, 0 damaged | VERIFIED |
+| 6 | before 05:09, **5 min**, USB link (REASONED from the 0.7 s start-up gap; command not pasted) | Board R + right MPU, still | 14968 in 300 s (49.9 Hz) | Right **100.0%** | 0 | 8 | — | VERIFIED |
 
 The other hand showed `STALE` in every run, as expected (that glove was off).
 
@@ -56,17 +59,25 @@ Motion sensor values over the radio:
   The receiver forwards every 20 ms, and the glove also sends every 20 ms on its own clock, so now
   and then two glove packets arrive within one forwarding period and only the newer one is
   forwarded. REASONED: the 1 and 3 gaps are from that, not packets lost over the radio.
+- **5-minute run (4):** about 15 frames of 15,001 were marked stale (no right-glove packet in the
+  receiver's 30 ms freshness window); each was a single frame, never an outage. The receiver's own
+  count shows 0 radio packets lost over the run, so the 25 gaps are all from the forwarding overlap
+  above (VERIFIED by the receiver's count).
+- **USB link (5, 6):** opening `/dev/ttyUSB0` restarted the receiver once (`frame_seq` 0, 1.5 Hz in
+  the first 0.7 s), then 50 Hz, as on 31 Oct. With a glove sending, the Pi showed the receiver's
+  statistics (`receiver:` line). So both links now work with a glove sending.
 - **Flex values:** meaningless here (no sensors). Board L reads about 0 because `c` was run on it
   earlier with nothing attached and that calibration is saved; board R drifts because it has the
   default calibration. Both need `c` again once the flex sensors are connected.
 - **LED:** board R's power LED stayed off although the board ran normally (owner). Cosmetic.
 
 **Conclusion:** each glove board, with its MPU and the new firmware, reaches the receiver over
-ESP-NOW and the Pi over the UART wires at 50 Hz with nothing lost. VERIFIED for one glove at a time
-over 20 s runs.
+ESP-NOW and the Pi at 50 Hz with no radio packets lost, over the UART wires and over the USB
+cable. VERIFIED for one glove at a time: 20 s runs for each glove, and 5 minutes for the right
+glove on each link, with the board still and close to the receiver.
 
-**NOT RUN yet:** both gloves sending at once (needs a third USB cable or the batteries), the USB
-link (`--link usb`) with a glove sending, longer runs, range and 2.4 GHz interference, the gloves
+**NOT RUN yet:** both gloves sending at once (needs a third USB cable or the batteries), the left
+glove for 5 minutes, runs with the glove moving or worn, range and 2.4 GHz interference, the gloves
 on their PCBs and batteries, real flex sensors.
 
 ## 4. Earlier the same night
@@ -116,5 +127,5 @@ weak USB supply or cable. NOT RUN: the same test with a short, thick data cable.
 - Assembler rework of both PCBs: 47 kΩ for R1–R6, pinky → IO36, palm → IO39, MPU on IO21 (SDA) /
   IO22 (SCL), the PCB power path (J8). Then the boards back in, `c` calibration on each glove.
 - Measure the other five divider resistors and do the PCB short and pin checks.
-- Both gloves at once; the USB link with gloves sending; longer, range and interference runs.
+- Both gloves at once; range and interference runs; runs with the gloves worn.
 - Brownouts with a better cable; the CP210x driver update on the laptop.

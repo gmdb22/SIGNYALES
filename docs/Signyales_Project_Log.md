@@ -212,6 +212,8 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   (`live_view.py --link uart`): left 100% fresh at 50.0 Hz, right 100% fresh at 50.0 Hz, receiver
   reports 0 dropped and 0 corrupt. Tilting the right MPU moved gravity between the axes (about 1 g
   total) and the gyro followed the motion. VERIFIED.
-- Not run yet: both gloves at once, the USB link with gloves sending, longer/range/interference
-  runs, the gloves on their PCBs and batteries, real flex sensors and calibration. The PCB rework is
+- Right glove, board still: 5 min over UART (99.9% fresh, no outage, receiver 0 dropped), 20 s and
+  5 min over the USB cable (100% fresh; one receiver restart when the port opens, as on 31 Oct).
+  VERIFIED.
+- Not run yet: both gloves at once, range/interference runs, runs with the gloves worn, the gloves on their PCBs and batteries, real flex sensors and calibration. The PCB rework is
   still with the hardware assembler.
