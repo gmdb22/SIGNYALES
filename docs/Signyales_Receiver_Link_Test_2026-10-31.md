@@ -71,7 +71,10 @@ Worked out from the same output:
 with nothing to wire wrong and it brings the receiver's own statistics; UART stays as the option
 (Active mode → Receiver link). The choice for the demo is the team's (still open).
 
-**NOT RUN yet:** both links with gloves sending (received %, lost, fresh %), runs longer than
+**Update 4 Nov 2026:** the UART link with one glove sending at a time was run: 100% fresh,
+50 Hz, 0 dropped (`docs/Signyales_Glove_Radio_Test_2026-11-04.md`).
+
+**NOT RUN yet:** both links with both gloves sending (received %, lost, fresh %), runs longer than
 10 s, 2.4 GHz interference, latency.
 
 ## 4. Glove hardware checks (same night)

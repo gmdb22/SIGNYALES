@@ -190,3 +190,28 @@ readings. The glove PCBs were not powered.
 - Not run yet: the `a` command on the real MPUs, the cable test for the brownouts, the other five
   resistors and both PCBs' short and pin checks, the glove firmware with the new IMU code.
 
+## 2026-11-03 to 2026-11-04 (glove firmware flashed, first glove radio test)
+
+Code at `3b469bf` (glove firmware from `8945b62`, receiver MAC added locally, not committed). Boards
+still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and numbers in
+`docs/Signyales_Glove_Radio_Test_2026-11-04.md`.
+
+- `a` command on a real MPU (laptop): WHO_AM_I 0x72, both config registers 0x08, 0.98 g lying
+  still. Glove firmware compiled and uploaded to both boards (`left_glove` on L, `right_glove`
+  on R): PASS.
+- The laptop showed a Windows stop screen twice while a board was plugged/unplugged with the GUI
+  monitor open (REASONED: CP210x driver). Testing moved to the Pi over SSH.
+- On the Pi, "IMU: nothing answers at 0x68" was SDA/SCL swapped on the jumpers. Wired correctly,
+  both MPUs on board L reach `Setup complete. Streaming...`.
+- Meter on board L: 3V3 pin 2.73 V (left MPU) / 3.02 V (right MPU) with the MPU attached, 3.27 /
+  3.31 V without; 5V pin 4.48 / 4.82 V vs 5.02 / 5.08 V. MPU current on the 10A range: 0.00 A for
+  both, so under about 10 mA. Correction to the 2–3 Nov entry (REASONED): the brownouts are not a
+  faulty MPU; the radio starts once the MPU is found and the USB supply/cable looks weak. Not yet
+  tried with a better cable.
+- Radio test, receiver on the UART wires to the Pi, one glove at a time, 20 s each
+  (`live_view.py --link uart`): left 100% fresh at 50.0 Hz, right 100% fresh at 50.0 Hz, receiver
+  reports 0 dropped and 0 corrupt. Tilting the right MPU moved gravity between the axes (about 1 g
+  total) and the gyro followed the motion. VERIFIED.
+- Not run yet: both gloves at once, the USB link with gloves sending, longer/range/interference
+  runs, the gloves on their PCBs and batteries, real flex sensors and calibration. The PCB rework is
+  still with the hardware assembler.
