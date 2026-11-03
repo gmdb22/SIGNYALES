@@ -1,6 +1,6 @@
 # Glove radio test (glove → receiver → Pi) and glove firmware checks
 
-Date: night of 3 to 4 November 2026 (Asia/Manila), ending about 04:45. Run by the project owner on
+Date: night of 3 to 4 November 2026 (Asia/Manila), ending about 06:05. Run by the project owner on
 the real hardware; the output and meter readings were pasted and read the same night. Code: branch
 `code-tasks` at `3b469bf`. Glove firmware from `8945b62` (MPU read directly, clone IDs accepted)
 with the receiver's MAC put into `config.h` locally (not committed). Receiver firmware unchanged
@@ -76,11 +76,41 @@ ESP-NOW and the Pi at 50 Hz with no radio packets lost, over the UART wires and 
 cable. VERIFIED for one glove at a time: 20 s runs for each glove, and 5 minutes for the right
 glove on each link, with the board still and close to the receiver.
 
-**NOT RUN yet:** both gloves sending at once (needs a third USB cable or the batteries), the left
-glove for 5 minutes, runs with the glove moving or worn, range and 2.4 GHz interference, the gloves
-on their PCBs and batteries, real flex sensors.
+## 4. Results: both gloves at once
 
-## 4. Earlier the same night
+**Setup change** (only two USB cables): the receiver was powered from the Pi's header instead of its
+USB-C: **Pi pin 2 (5V) → the 5V pin of the expansion board's power block** (the block under D13,
+with GND, 5V and 3.3V columns), receiver USB-C unplugged. Ground: Pi pin 6 → a GND pin of the same
+block. UART wires unchanged (D17 → pin 10, D18 → pin 8). Board L + left MPU on the data cable and
+board R + right MPU on the charge-only cable, both into Pi USB ports. Before wiring, with the
+receiver still on USB, the owner measured that block's 5V and 3.3V pins in their normal ranges (no
+exact numbers noted). Wiring changed with the Pi shut down and its power cable out (a Pi 5 keeps
+its USB ports and 5V pins powered after `shutdown` until the cable is pulled).
+
+| # | Time | Run | Frames | Left fresh | Right fresh | Outages > 2 s | Glove seq gaps L / R | Label |
+|---|---|---|---|---|---|---|---|---|
+| 7 | 05:57, 20 s | `--link uart` | 1000 (50.0 Hz) | **100.0%** | `R ok` on every printed line (summary cut off, see below) | 0 (left) | 3 / — | VERIFIED |
+| 8 | about 06:00, **5 min** | `--link uart` | 15001 in 300 s (50.0 Hz) | **100.0%** | **100.0%** | 0 / 0 | 6 / 120 | VERIFIED |
+
+- The receiver merged both gloves into every frame for 5 minutes at 50 Hz with no outage on either
+  hand (VERIFIED). This is the first test of the full two-glove radio path.
+- **Right glove 120 gaps (0.8% of about 15,000 packets).** The receiver's own `dropped` count could
+  not be read (its USB was unplugged). REASONED: most are the forwarding overlap described in
+  section 3, not radio loss. A lost packet leaves a 40 ms hole, and about half the frames during a
+  hole would be marked stale (30 ms window); 120 losses would show as roughly 99.6% fresh, while the
+  run shows 100.0%. Not confirmed. Next time keep the receiver's USB on a data cable to read
+  `[stats]`.
+- **Run 7's summary stopped with `KeyboardInterrupt`:** the traceback's line numbers match
+  `live_view.py` from before the 31 Oct fix (`01fe742`), so the Pi had not been updated since then.
+  After that, the 5-minute summary printed in full. The frame data are not affected.
+- Correction to the 31 Oct wiring picture: the block under D13 is not all ground; it has GND, 5V and
+  3.3V columns. The ground wire must go to its GND column.
+
+**NOT RUN yet:** the left glove alone for 5 minutes (it ran 5 minutes together with the right
+glove), runs with the gloves moving or worn, range and 2.4 GHz interference, the gloves on their
+PCBs and batteries, real flex sensors.
+
+## 5. Earlier the same night
 
 **On the laptop (Windows, GUI Hardware helper / PlatformIO)**
 
@@ -122,10 +152,10 @@ found, the firmware starts the radio, which draws far more current than the MPU,
 readings with the MPU attached mix the two. The 5V pin also sags (4.48–4.82 V), which points at a
 weak USB supply or cable. NOT RUN: the same test with a short, thick data cable.
 
-## 5. Still to do
+## 6. Still to do
 
 - Assembler rework of both PCBs: 47 kΩ for R1–R6, pinky → IO36, palm → IO39, MPU on IO21 (SDA) /
   IO22 (SCL), the PCB power path (J8). Then the boards back in, `c` calibration on each glove.
 - Measure the other five divider resistors and do the PCB short and pin checks.
-- Both gloves at once; range and interference runs; runs with the gloves worn.
+- Range and interference runs; runs with the gloves worn; receiver `[stats]` during a two-glove run.
 - Brownouts with a better cable; the CP210x driver update on the laptop.

@@ -215,5 +215,9 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
 - Right glove, board still: 5 min over UART (99.9% fresh, no outage, receiver 0 dropped), 20 s and
   5 min over the USB cable (100% fresh; one receiver restart when the port opens, as on 31 Oct).
   VERIFIED.
-- Not run yet: both gloves at once, range/interference runs, runs with the gloves worn, the gloves on their PCBs and batteries, real flex sensors and calibration. The PCB rework is
+- Both gloves at once (receiver powered from Pi pin 2 → the expansion board's 5V pin, its USB-C
+  unplugged; board L on the data cable, board R on the charge-only cable): 20 s and 5 min over UART,
+  50 Hz, left and right 100% fresh, no outages. VERIFIED. The Pi's `live_view.py` was found out of
+  date (pre-31 Oct, cut off one summary) and was updated.
+- Not run yet: range/interference runs, runs with the gloves worn, the gloves on their PCBs and batteries, real flex sensors and calibration. The PCB rework is
   still with the hardware assembler.

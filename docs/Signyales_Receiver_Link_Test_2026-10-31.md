@@ -73,9 +73,10 @@ with nothing to wire wrong and it brings the receiver's own statistics; UART sta
 
 **Update 4 Nov 2026:** both links were run with one glove sending at a time (UART: both gloves
 20 s, right glove 5 min; USB: right glove 20 s and 5 min): 50 Hz, about 100% fresh, 0 radio packets
-lost (`docs/Signyales_Glove_Radio_Test_2026-11-04.md`).
+lost; and both gloves at once over UART for 5 minutes, both 100% fresh
+(`docs/Signyales_Glove_Radio_Test_2026-11-04.md`).
 
-**NOT RUN yet:** both links with both gloves sending (received %, lost, fresh %), runs longer than
+**NOT RUN yet:** the USB link with both gloves sending (received %, lost, fresh %), runs longer than
 10 s, 2.4 GHz interference, latency.
 
 ## 4. Glove hardware checks (same night)
