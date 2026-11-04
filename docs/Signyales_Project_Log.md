@@ -233,3 +233,15 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   25 failed reads), the earlier IMU tests, and the frame round-trip test. The functions used were
   checked against the ESP32 Arduino core 2.0.17 headers. Not compiled with PlatformIO yet, not run
   on the boards.
+- Later the same morning (owner, real hardware): compiled and uploaded from the laptop GUI to both
+  boards, PASS (board L needed BOOT held). Resting offsets measured at start-up: left about
+  -4.6, +2.7, -0.3 deg/s, right about -4.2, +1.1, -0.2 deg/s, the same on every boot (saved). The
+  "glove moved" fallback triggered a few times on the laptop (spread up to 1.9 deg/s on one axis)
+  and kept the saved offset as intended; the 1.5 deg/s stillness limit may be a little strict.
+  On the laptop the boards still reset with `Brownout` right where the radio starts (weak laptop
+  USB, as before). On the Pi (receiver on Pi pin 2 → expansion board 5V, both gloves powered by the
+  Pi): both 100% fresh at 50 Hz, gyro at rest about 0 (within about ±1.6 deg/s noise, was about
+  -4 / +2 / -0.3 before), and a tilt test moved accel (total about 1 g) and gyro (up to about
+  157 deg/s) on both. VERIFIED. Right glove seq gaps: 67 in one 20 s run, 12 in the next
+  (REASONED: forwarding overlap, varies between runs; receiver count not readable with its USB
+  unplugged). The I2C recovery and restart paths were not triggered on hardware.
