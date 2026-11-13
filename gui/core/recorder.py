@@ -2,15 +2,22 @@
 Signyales GUI — record gesture repetitions with Start/Stop buttons.
 
 Saves files in exactly the format pi-side/tools/collect_gesture.py writes
-(<out>/<label>/rep_NNNN.npz with "features" (window, 24) and "label"), and
-uses that tool's own resample_to_fixed_length, so the training pipeline
-can't tell the two apart.
+(<out>/<label>/rep_NNNN.npz with "features" (window, 24) and "label"), so
+the training pipeline can't tell the two apart.
 
-One difference by design: the GUI's pipeline reads the serial port all
-the time, so a repetition starts from the current frame, not from frames
-that piled up while waiting (finding F2 does not apply here). Findings F1
-and F3 still apply: repetitions are resampled to the window length, and
-frames with a missing hand are kept. Both change with the F1-F5 work.
+Fixed-length recording (decision D1, 14 Nov 2026, replaces finding F1's
+resampling): a repetition is exactly cfg.window_size_samples raw frames
+(2.5 s at 50 Hz), the same stretch of time the live recogniser looks at.
+START begins it and it ends and saves by itself when the window is full;
+stopping early discards it. Start from rest, sign once, return to rest.
+fixed_length=False gives the old START/STOP behaviour (any length,
+resampled to the window), kept only for comparison.
+
+The GUI's pipeline reads the serial port all the time, so a repetition
+starts from the current frame, not from frames that piled up while
+waiting (finding F2 does not apply here). Finding F3 still applies:
+frames with a missing hand are kept, which is what a one-glove setup
+needs (the absent glove reads as zeros in training and live alike).
 
 No Tk imports.
 """
@@ -57,11 +64,17 @@ def count_reps(out_dir, label) -> int:
 class GestureRecorder:
     """Attach to a LivePipeline with pipeline.add_frame_listener(recorder.on_frame)."""
 
-    def __init__(self, out_dir, cfg=None):
+    def __init__(self, out_dir, cfg=None, fixed_length=True):
         self.out_dir = Path(out_dir)
         self.cfg = cfg or HubConfig()
+        self.fixed_length = fixed_length
         self._buf = None
         self._lock = threading.Lock()
+
+    @property
+    def target_frames(self):
+        """Frames in one saved repetition (the model's window length)."""
+        return self.cfg.window_size_samples
 
     @property
     def recording(self):
@@ -73,9 +86,18 @@ class GestureRecorder:
         with self._lock:
             return len(self._buf) if self._buf is not None else 0
 
+    @property
+    def complete(self):
+        """True once a fixed-length repetition has all its frames (ready to save)."""
+        with self._lock:
+            return (self.fixed_length and self._buf is not None
+                    and len(self._buf) >= self.target_frames)
+
     def on_frame(self, frame, features):
         with self._lock:
             if self._buf is not None:
+                if self.fixed_length and len(self._buf) >= self.target_frames:
+                    return               # full: wait for the GUI to save it
                 self._buf.append(features)
 
     def start_rep(self):
@@ -95,9 +117,16 @@ class GestureRecorder:
             buf, self._buf = self._buf, None
         if buf is None:
             raise ValueError("Not recording.")
-        if len(buf) < 2:
-            raise ValueError("Too short (fewer than 2 frames). Hold the sign a little longer.")
-        window = resample_to_fixed_length(np.stack(buf), self.cfg.window_size_samples)
+        n = self.target_frames
+        if self.fixed_length:
+            if len(buf) < n:
+                raise ValueError(f"Stopped early ({len(buf)} of {n} frames, {len(buf) / 50:.1f} of "
+                                 f"{n / 50:.1f} s). Let the recording finish by itself.")
+            window = np.stack(buf[:n]).astype(np.float32)
+        else:
+            if len(buf) < 2:
+                raise ValueError("Too short (fewer than 2 frames). Hold the sign a little longer.")
+            window = resample_to_fixed_length(np.stack(buf), n)
         label_dir = self.out_dir / label
         label_dir.mkdir(parents=True, exist_ok=True)
         idx = len(list(label_dir.glob("rep_*.npz")))

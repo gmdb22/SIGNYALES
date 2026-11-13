@@ -302,9 +302,12 @@ class PiActiveView(ttk.Frame):
                                   bg="#2f7a4f", fg="white", activebackground="#25613e", height=2,
                                   command=self.toggle_rep, state="disabled", takefocus=0)
         self.k_button.pack(fill="x", pady=4)
-        ttk.Label(tab, text="Press START, sign the word once, press STOP. Esc cancels a repetition. "
-                            "Repeat until the target is reached, then pick the next word.",
-                  foreground=MUTED).pack(anchor="w")
+        secs = recorder.HubConfig().window_size_samples / 50
+        ttk.Label(tab, text=f"Hand at rest, press START, sign the word once and return to rest. The "
+                            f"recording stops and saves by itself after {secs:.1f} s. Pressing START/STOP "
+                            "again before then, or Esc, discards it. Repeat until the target is reached, "
+                            "then pick the next word.",
+                  foreground=MUTED, wraplength=900).pack(anchor="w")
         low = ttk.Frame(tab)
         low.pack(fill="both", expand=True, pady=6)
         self.k_hands = HandStatus(low)
@@ -345,8 +348,6 @@ class PiActiveView(ttk.Frame):
             self.k_button.configure(state="normal")
         elif t == "status":
             self.k_hands.update_status(e)
-            if self.recorder and self.recorder.recording:
-                self.k_button.configure(text=f"STOP  (Space)   recording... {self.recorder.frame_count} frames")
         elif t == "error":
             self.k_log.append("ERROR: " + e["message"], "fail")
         elif t == "stopped":
@@ -378,30 +379,64 @@ class PiActiveView(ttk.Frame):
             messagebox.showwarning("Word name", err)
             return
         if not self.recorder.recording:
+            self._rep_label = label
             self.recorder.start_rep()
             self._rep_started = now
-            self.k_button.configure(text="STOP  (Space)   recording...", bg="#b3412c",
+            self.k_button.configure(text="RECORDING... sign now  (Space = discard)", bg="#b3412c",
                                     activebackground="#8f3423")
-        else:
-            elapsed = now - self._rep_started
+            self.app.after(50, self._poll_rep)
+        elif self.recorder.fixed_length and not self.recorder.complete:
             frames = self.recorder.frame_count
-            try:
-                path, frames = self.recorder.stop_rep(label)
-                self.k_log.append(f"Saved {path.name} for '{label}' ({frames} frames, "
-                                  f"{frames / 50:.1f} s)", "pass")
-            except ValueError as exc:
-                if frames == 0:
-                    self.k_log.append(f"Not saved: no glove data reached the recorder (0 frames in "
-                                      f"{elapsed:.1f} s). Check the glove status lights above (green = data), "
-                                      "then Disconnect and Connect again.", "fail")
-                elif frames < 2:
-                    self.k_log.append(f"Not saved: STOP came {elapsed:.2f} s after START. Hold the sign a "
-                                      "little longer before stopping.", "fail")
-                else:
-                    self.k_log.append(f"Not saved: {exc}", "fail")
-            self.k_button.configure(text="3. START repetition  (Space)", bg="#2f7a4f",
-                                    activebackground="#25613e")
-            self._update_counts()
+            self.recorder.cancel_rep()
+            self.k_log.append(f"Discarded: stopped after {frames / 50:.1f} s, before the "
+                              f"{self.recorder.target_frames / 50:.1f} s window was full. "
+                              "Let it finish by itself.", "muted")
+            self._reset_rep_button()
+        else:
+            self._finish_rep()
+
+    def _poll_rep(self):
+        """While a fixed-length repetition records: show progress, save it once full."""
+        rec = self.recorder
+        if not rec or not rec.recording:
+            return
+        if rec.complete:
+            self._finish_rep()
+            return
+        elapsed = time.monotonic() - self._rep_started
+        frames, target = rec.frame_count, rec.target_frames
+        if frames == 0 and elapsed > 2.0:
+            rec.cancel_rep()
+            self.k_log.append(f"Not saved: no glove data reached the recorder (0 frames in {elapsed:.1f} s). "
+                              "Check the glove status lights above (green = data), then Disconnect and "
+                              "Connect again.", "fail")
+            self._reset_rep_button()
+            return
+        self.k_button.configure(text=f"RECORDING... {frames / 50:.1f} / {target / 50:.1f} s  "
+                                     "(Space = discard)")
+        self.app.after(50, self._poll_rep)
+
+    def _finish_rep(self):
+        label = getattr(self, "_rep_label", None) or self.k_word.get().strip()
+        elapsed = time.monotonic() - self._rep_started
+        frames = self.recorder.frame_count
+        try:
+            path, frames = self.recorder.stop_rep(label)
+            self.k_log.append(f"Saved {path.name} for '{label}' ({frames} frames, "
+                              f"{frames / 50:.1f} s)", "pass")
+        except ValueError as exc:
+            if frames == 0:
+                self.k_log.append(f"Not saved: no glove data reached the recorder (0 frames in "
+                                  f"{elapsed:.1f} s). Check the glove status lights above (green = data), "
+                                  "then Disconnect and Connect again.", "fail")
+            else:
+                self.k_log.append(f"Not saved: {exc}", "fail")
+        self._reset_rep_button()
+
+    def _reset_rep_button(self):
+        self.k_button.configure(text="3. START repetition  (Space)", bg="#2f7a4f",
+                                activebackground="#25613e")
+        self._update_counts()
 
     def _space(self, event):
         if isinstance(event.widget, (tk.Entry, ttk.Entry, ttk.Combobox, tk.Spinbox, ttk.Spinbox)):

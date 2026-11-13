@@ -3,7 +3,7 @@ Signyales — Pi-side unit tests (no hardware, no model, no TensorFlow)
 
 Checks the pure-logic pieces of the hub and its tools with synthetic
 inputs: feature order, the rolling window, the debouncer (including the
-silent rest label), the recorder's resampling, the model loader's
+silent rest label), the recorder's fixed-length capture and resampling, the model loader's
 "no model" behaviour, and the helper functions in the testing tools.
 Needs only numpy (and pyserial is NOT needed).
 
@@ -59,9 +59,9 @@ def make_frame(left_flex, right_flex, la, lg, ra, rg):
 
 # ---------------------------------------------------------------- config
 cfg = HubConfig()
-check("config: 24 features, 50-sample window, 0.70 threshold, 3 consecutive",
+check("config: 24 features, 125-sample (2.5 s) window (D1), 0.70 threshold, 3 consecutive",
       (cfg.feature_count, cfg.window_size_samples, cfg.confidence_threshold,
-       cfg.debounce_required_consecutive) == (24, 50, 0.70, 3))
+       cfg.debounce_required_consecutive) == (24, 125, 0.70, 3))
 from signyales_hub.serial_link import FLEX_NAMES, FLEX_PER_GLOVE  # noqa: E402
 check("config: feature_count = 2 x 6 flex + 12 accel/gyro, matching serial_link",
       FLEX_PER_GLOVE == 6 and len(FLEX_NAMES) == 6 and cfg.feature_count == 2 * FLEX_PER_GLOVE + 12)
@@ -142,6 +142,53 @@ res = collect.resample_to_fixed_length(seq, 50)
 check("resample: output shape (50, features)", res.shape == (50, 2), res.shape)
 check("resample: endpoints preserved", np.allclose(res[0], seq[0]) and np.allclose(res[-1], seq[-1]))
 check("resample: linear ramps stay linear", np.allclose(res[:, 0], np.linspace(0, 1, 50), atol=1e-6))
+
+import threading as _th  # noqa: E402
+import time as _time  # noqa: E402
+
+
+def counting_frames(rate_hz, started):
+    """Frames whose right thumb flex is a running counter (0, 1, 2, ...)."""
+    i = 0
+    started.set()
+    while True:
+        yield make_frame([0] * 6, [i % 4096] + [0] * 5, [0, 0, 1], [0, 0, 0], [0, 0, 1], [0, 0, 0])
+        i += 1
+        _time.sleep(1 / rate_hz)
+
+
+started = _th.Event()
+bg = collect.BackgroundFrames(counting_frames(200, started))
+started.wait(2)
+_time.sleep(0.3)                     # ~60 frames go by before START
+win = bg.capture(40)
+counter = np.round(win[:, 6] * 4095).astype(int)   # right thumb = feature 6
+check("fixed-length capture: exactly n raw frames, shape (n, 24)", win.shape == (40, 24), win.shape)
+check("fixed-length capture: consecutive frames, nothing resampled or skipped",
+      np.array_equal(np.diff(counter), np.ones(39, dtype=int)), counter[:5])
+check("fixed-length capture: starts from current frames, not ones that piled up before START (F2)",
+      counter[0] >= 30, counter[0])
+win2 = bg.capture(10)
+c2 = np.round(win2[:, 6] * 4095).astype(int)
+check("fixed-length capture: a second rep starts after the first", c2[0] > counter[-1], (c2[0], counter[-1]))
+
+
+def dead_after(n):
+    for i in range(n):
+        yield make_frame([0] * 6, [i] + [0] * 5, [0, 0, 1], [0, 0, 0], [0, 0, 1], [0, 0, 0])
+    while True:
+        _time.sleep(1)
+        if False:
+            yield None
+
+
+bg2 = collect.BackgroundFrames(dead_after(5))
+try:
+    bg2.capture(20, timeout=0.6)
+    timed_out = False
+except RuntimeError:
+    timed_out = True
+check("fixed-length capture: gives up with an error when frames stop arriving", timed_out)
 
 # ------------------------------------------------- model loader, no model
 with tempfile.TemporaryDirectory() as tmp:

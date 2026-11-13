@@ -34,7 +34,13 @@ class HubConfig:
     # --- Feature window fed to the model ---
     # At 50 Hz (matching the glove/receiver sample rate), window_size_samples
     # covers window_size_samples / 50 seconds of motion per inference.
-    window_size_samples: int = 50   # 1.0s of context per inference
+    # Decision D1 (14 Nov 2026): 2.5 s. Recordings are captured at exactly
+    # this length, raw (no resampling), so a training rep and a live window
+    # cover the same stretch of time. 2.5 s fits a short phrase such as
+    # "sorry, I don't understand"; a single word sits inside it with rest
+    # before and after, just as it does in the live sliding window.
+    # Models and recordings made with another window length are refused.
+    window_size_samples: int = 125  # 2.5 s of context per inference
     # The Pi 5's quad-core Cortex-A76 has comfortable headroom for more
     # frequent inference than a Pi 4 or Pi Zero would — a stride of 5
     # (~10 inferences/sec) is a reasonable starting point. Profile with

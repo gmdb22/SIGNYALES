@@ -51,6 +51,9 @@ def frame(seq, left_valid=True, right_valid=True, flex=1000):
             "right_valid": right_valid, "left": glove(0), "right": glove(1), "checksum": 0}
 
 
+W = recorder.HubConfig().window_size_samples    # model window (125 = 2.5 s, decision D1)
+
+
 class FakeClassifier:
     """Returns labels from a script, one per predict() call."""
     available = True
@@ -60,7 +63,7 @@ class FakeClassifier:
         self._script = list(script)
 
     def predict(self, window):
-        assert window.shape == (50, 24)
+        assert window.shape == (W, 24)
         return (self._script.pop(0), 0.95) if self._script else ("rest", 0.95)
 
 
@@ -102,8 +105,8 @@ check("runner: timeout stops a long command and reports it", wait_for(lambda: "r
       and done.get("to") is True)
 
 # ---------------------------------------------------------------- live pipeline
-# 50 frames fill the window; inference every 5th frame (frames 50, 55, 60, ...).
-frames = [frame(i) for i in range(1, 50 + 5 * 12)]
+# W frames fill the window; inference every 5th frame (frames W, W+5, W+10, ...).
+frames = [frame(i) for i in range(1, W + 5 * 12)]
 script = ["oo"] * 4 + ["rest"] * 3 + ["oo"] * 3 + ["salamat"] * 2
 ev = run_pipeline(frames, FakeClassifier(script))
 gestures = [e["label"] for e in ev if e["type"] == "gesture"]
@@ -113,9 +116,9 @@ check("live: started and stopped events", ev[0]["type"] == "started" and ev[-1][
 preds = [e for e in ev if e["type"] == "prediction"]
 check("live: one prediction per stride once the window is full", len(preds) == 12, len(preds))
 
-bad = [frame(i) for i in range(1, 60)] + [frame(i, False, False) for i in range(60, 70)]
+bad = [frame(i) for i in range(1, W + 10)] + [frame(i, False, False) for i in range(W + 10, W + 20)]
 ev = run_pipeline(bad, FakeClassifier(["oo"] * 10))
-check("live: frames with both hands invalid are skipped (no inference after frame 59)",
+check(f"live: frames with both hands invalid are skipped (no inference after frame {W + 9})",
       len([e for e in ev if e["type"] == "prediction"]) == 2)
 
 events = []
@@ -162,24 +165,33 @@ with tempfile.TemporaryDirectory() as tmp:
     rec = recorder.GestureRecorder(tmp)
     check("recorder: bad labels rejected", recorder.check_label("Salamat") is not None
           and recorder.check_label("salamat") is None and recorder.check_label("rest") is None)
+    check("recorder: fixed-length by default, one rep = the model window (D1)",
+          rec.fixed_length and rec.target_frames == W)
     rec.start_rep()
-    for i in range(37):
+    for i in range(W + 30):                      # more frames than needed arrive before saving
         rec.on_frame(frame(i), np.full(24, i, dtype=np.float32))
+    check("recorder: complete once the window is full, extra frames ignored",
+          rec.complete and rec.frame_count == W)
     path, n = rec.stop_rep("salamat")
     with np.load(path) as data:          # close the file: Windows can't delete open files
-        shape, label = data["features"].shape, str(data["label"])
-    check("recorder: saves rep_0000.npz like collect_gesture.py",
-          path.name == "rep_0000.npz" and shape == (50, 24) and label == "salamat" and n == 37)
+        feats, label = data["features"], str(data["label"])
+    check("recorder: saves rep_0000.npz like collect_gesture.py, (W, 24) raw frames",
+          path.name == "rep_0000.npz" and feats.shape == (W, 24) and label == "salamat" and n == W)
+    check("recorder: frames saved as they arrived (no resampling)",
+          np.array_equal(feats[:, 0], np.arange(W, dtype=np.float32)))
     rec.start_rep()
-    rec.on_frame(frame(1), np.zeros(24, dtype=np.float32))
+    for i in range(W - 1):
+        rec.on_frame(frame(i), np.zeros(24, dtype=np.float32))
+    check("recorder: not complete one frame short", not rec.complete)
     try:
         rec.stop_rep("salamat")
-        short_ok = False
-    except ValueError:
-        short_ok = True
-    check("recorder: a 1-frame repetition is refused", short_ok)
+        early_ok = False
+    except ValueError as exc:
+        early_ok = "early" in str(exc)
+    check("recorder: stopping before the window is full saves nothing", early_ok
+          and recorder.count_reps(tmp, "salamat") == 1)
     rec.start_rep()
-    for i in range(10):
+    for i in range(W):
         rec.on_frame(frame(i), np.zeros(24, dtype=np.float32))
     path2, _ = rec.stop_rep("salamat")
     check("recorder: numbering continues", path2.name == "rep_0001.npz"
@@ -191,6 +203,24 @@ with tempfile.TemporaryDirectory() as tmp:
     check("recorder: frame_count shows frames in the current repetition", rec.frame_count == 3)
     rec.cancel_rep()
     check("recorder: frame_count is 0 when not recording", rec.frame_count == 0)
+
+    old = recorder.GestureRecorder(tmp, fixed_length=False)
+    old.start_rep()
+    for i in range(37):
+        old.on_frame(frame(i), np.full(24, i, dtype=np.float32))
+    path3, n3 = old.stop_rep("oo")
+    with np.load(path3) as data:
+        shape3 = data["features"].shape
+    check("recorder: old START/STOP mode still resamples any length to the window",
+          shape3 == (W, 24) and n3 == 37 and not old.complete)
+    old.start_rep()
+    old.on_frame(frame(1), np.zeros(24, dtype=np.float32))
+    try:
+        old.stop_rep("oo")
+        short_ok = False
+    except ValueError:
+        short_ok = True
+    check("recorder: old mode refuses a 1-frame repetition", short_ok)
 
 # ---------------------------------------------------------------- data folder check
 with tempfile.TemporaryDirectory() as tmp:

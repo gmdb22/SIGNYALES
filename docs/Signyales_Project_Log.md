@@ -245,3 +245,22 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   157 deg/s) on both. VERIFIED. Right glove seq gaps: 67 in one 20 s run, 12 in the next
   (REASONED: forwarding overlap, varies between runs; receiver count not readable with its USB
   unplugged). The I2C recovery and restart paths were not triggered on hardware.
+
+## 2026-11-14
+
+- Decided D1 (window length): every recording is exactly the model window, raw, with no
+  resampling, and the window is 2.5 s (`window_size_samples` = 125 at 50 Hz), long enough for
+  a short phrase. The GUI Record tab and `collect_gesture.py` now start a repetition at START
+  and save it by themselves when the window is full; stopping early discards it.
+  `collect_gesture.py` reads frames in the background, so a repetition no longer starts with
+  frames that piled up while waiting (F2). The old START/STOP mode is kept only behind
+  `--variable` / `fixed_length=False`. Recordings and models made with the old 50-sample window
+  are flagged by `train.py` and refused by the recogniser.
+- Verified in an AI assistant's Linux sandbox with fake or synthetic data only: frame
+  round-trip, Pi-side unit tests (with new capture checks), GUI core tests, training smoke test
+  (TensorFlow 2.21.0, 125x24 data), the GUI Record tab on a virtual screen and
+  `collect_gesture.py --simulate`. Not yet run on the Windows laptop, the Pi or a real glove.
+- One-glove demo planned (right glove, board R), signed with the right hand: words hello, deaf,
+  hard of hearing, hearing, yes, no; phrases "sorry, I don't understand" and "I'm fine", each
+  learned as one class; plus a rest class.
+

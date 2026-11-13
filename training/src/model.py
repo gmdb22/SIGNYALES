@@ -8,7 +8,7 @@ is not the place to reach for a large model, since more capacity only
 helps if there is enough labeled data to justify it, and gesture
 datasets collected by hand rarely are large.
 
-Input shape: (window_size, feature_count), e.g. (50, 24).
+Input shape: (window_size, feature_count), e.g. (125, 24) for the 2.5 s window.
 """
 
 import tensorflow as tf

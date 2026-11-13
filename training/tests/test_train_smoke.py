@@ -37,6 +37,9 @@ TRAIN = REPO / "training" / "src" / "train.py"
 sys.path.insert(0, str(REPO / "pi-side"))
 sys.path.insert(0, str(REPO / "training" / "src"))
 
+from signyales_hub.config import HubConfig  # noqa: E402
+
+W = HubConfig().window_size_samples    # model window (125 = 2.5 s, decision D1)
 LABELS = ["alpha", "bravo", "charlie"]
 REPS = 24
 failures = []
@@ -79,7 +82,7 @@ def main():
     tmp = Path(tempfile.mkdtemp(prefix="signyales_train_smoke_"))
     try:
         data = tmp / "data"
-        make_dataset(data, window=50)
+        make_dataset(data, window=W)
         skip = data / "_stage7b_fist"
         skip.mkdir()
         shutil.copy(data / "alpha" / "rep_0000.npz", skip / "rep_0000.npz")
@@ -109,7 +112,7 @@ def main():
               report.get("data", {}).get("labels") == LABELS
               and report["data"]["samples_per_label"] == {lbl: REPS for lbl in LABELS}
               and report["data"]["skipped_folders"] == ["_stage7b_fist"])
-        check("report: no config problems for 50x24 data",
+        check(f"report: no config problems for {W}x24 data",
               report.get("hub_config_check", {}).get("problems") == [])
         check("report: exported model agrees with Keras on every test window",
               report.get("export", {}).get("hub_runtime_agreement", {}).get("agree")
@@ -118,14 +121,14 @@ def main():
         check("F6: mean validation confidence clears the hub threshold (0.70)",
               val_mean is not None and val_mean >= 0.70, val_mean)
 
-        clf = GestureClassifier(str(f32), expected_window=50, expected_features=24)
+        clf = GestureClassifier(str(f32), expected_window=W, expected_features=24)
         check("float32: loads in the hub runtime", clf.available)
 
         # ---- int8
         i8 = tmp / "model_int8"
         p = train(data, i8, extra=("--quantize",))
         check("int8: train.py --quantize exits 0", p.returncode == 0)
-        clf8 = GestureClassifier(str(i8), expected_window=50, expected_features=24)
+        clf8 = GestureClassifier(str(i8), expected_window=W, expected_features=24)
         check("int8: loads in the hub runtime with int8 input",
               clf8.available and clf8.input_details[0]["dtype"] == np.int8)
         if clf8.available and clf.available:
@@ -158,7 +161,7 @@ def main():
         check("mismatch: 40-sample data is flagged against config.py",
               any("40 samples" in s for s in r40.get("hub_config_check", {}).get("problems", [])))
         check("mismatch: hub refuses the 40-sample model",
-              not GestureClassifier(str(m40), expected_window=50, expected_features=24).available)
+              not GestureClassifier(str(m40), expected_window=W, expected_features=24).available)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
