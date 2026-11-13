@@ -217,6 +217,11 @@ const uint32_t IMU_REINIT_MIN_GAP_MS     = 2000;  // at most one re-start every 
 uint32_t imuConsecutiveFailures = 0;
 uint32_t lastImuReinit = 0;
 bool wireStarted = false;
+// The MPU's I2C address: 0x68 when its AD0 pin is low, 0x69 when AD0 is
+// high (or floating high, e.g. AD0 left unconnected on a socket).
+// setupImu() tries IMU_I2C_ADDR first, then the other one, and keeps
+// whichever answers, so a glove works either way without rewiring.
+uint8_t imuAddr = IMU_I2C_ADDR;
 
 // Gyro resting offset (added 4 Nov 2026). Both clone MPUs read a few
 // deg/s on some axes while lying still (e.g. about -4.4, +2.8, -0.3 deg/s
@@ -230,17 +235,17 @@ const float GYRO_CAL_MAX_OFFSET_DPS = 15.0f;  // larger than this = not a restin
 float gyroOffset[3] = {0, 0, 0};
 
 bool imuWrite(uint8_t reg, uint8_t value) {
-  Wire.beginTransmission(IMU_I2C_ADDR);
+  Wire.beginTransmission(imuAddr);
   Wire.write(reg);
   Wire.write(value);
   return Wire.endTransmission() == 0;
 }
 
 bool imuRead(uint8_t reg, uint8_t* buf, uint8_t len) {
-  Wire.beginTransmission(IMU_I2C_ADDR);
+  Wire.beginTransmission(imuAddr);
   Wire.write(reg);
   if (Wire.endTransmission(false) != 0) return false;
-  if (Wire.requestFrom((uint8_t)IMU_I2C_ADDR, len) != len) return false;
+  if (Wire.requestFrom(imuAddr, len) != len) return false;
   for (uint8_t i = 0; i < len; i++) buf[i] = Wire.read();
   return true;
 }
@@ -298,10 +303,18 @@ void startI2c() {
 // if nothing answers, the chip ID isn't accepted, or a setting doesn't stick.
 bool setupImu() {
   uint8_t id = 0;
+  const uint8_t otherAddr = (IMU_I2C_ADDR == 0x68) ? 0x69 : 0x68;
+  imuAddr = IMU_I2C_ADDR;
   if (!imuRead(IMU_REG_WHO_AM_I, &id, 1)) {
-    Serial.printf("IMU: nothing answers at 0x%02X on SDA=GPIO%d, SCL=GPIO%d.\n",
-                  IMU_I2C_ADDR, IMU_SDA_PIN, IMU_SCL_PIN);
-    return false;
+    imuAddr = otherAddr;
+    if (!imuRead(IMU_REG_WHO_AM_I, &id, 1)) {
+      imuAddr = IMU_I2C_ADDR;
+      Serial.printf("IMU: nothing answers at 0x%02X or 0x%02X on SDA=GPIO%d, SCL=GPIO%d.\n",
+                    IMU_I2C_ADDR, otherAddr, IMU_SDA_PIN, IMU_SCL_PIN);
+      return false;
+    }
+    Serial.printf("IMU: found at 0x%02X instead of 0x%02X (its AD0 pin is high or "
+                  "unconnected); using 0x%02X.\n", imuAddr, IMU_I2C_ADDR, imuAddr);
   }
   if (!imuIdAccepted(id)) {
     Serial.printf("IMU: WHO_AM_I=0x%02X is not in IMU_ACCEPTED_IDS (config.h).\n", id);
@@ -326,8 +339,8 @@ bool setupImu() {
                   gyroCfg, accelCfg);
     return false;
   }
-  Serial.printf("IMU: WHO_AM_I=0x%02X%s, +-4 g, +-500 deg/s.\n", id,
-                id == 0x68 ? " (MPU6050)" : " (compatible chip)");
+  Serial.printf("IMU: WHO_AM_I=0x%02X%s at 0x%02X, +-4 g, +-500 deg/s.\n", id,
+                id == 0x68 ? " (MPU6050)" : " (compatible chip)", imuAddr);
   return true;
 }
 

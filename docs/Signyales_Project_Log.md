@@ -263,4 +263,9 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
 - One-glove demo planned (right glove, board R), signed with the right hand: words hello, deaf,
   hard of hearing, hearing, yes, no; phrases "sorry, I don't understand" and "I'm fine", each
   learned as one class; plus a rest class.
+- Glove firmware: the board R glove stopped streaming after re-wiring. Its boot log showed
+  "FATAL: MPU6050 not found" at 0x68 and "I2C device found at 0x69, WHO_AM_I=0x72": the MPU's
+  AD0 pin is high or floating on the new wiring. `setupImu()` now tries 0x68, then 0x69, and
+  uses whichever answers (the same check runs again on every IMU restart). Not compiled in the
+  sandbox (PlatformIO download blocked); compile and upload on the laptop.
 
