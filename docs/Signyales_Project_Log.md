@@ -284,3 +284,17 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   core tests (new label-text checks), and the subtitle panel on a virtual screen (900x260:
   "sorry, I don't understand" goes on two lines at 83 px; single words unchanged at 167 px).
   `setup_pi.sh` was only syntax-checked. Not yet run on the Pi or heard through espeak-ng.
+- Scope after the first defense (owner, 19 Nov): the paper is being overhauled; the system
+  focuses on the right glove only, and the vocabulary is the FSL alphabet plus 8-10 one-handed
+  words (list still being decided).
+- Words are now typed as they should appear: the Record tab and `collect_gesture.py --label`
+  accept any word, letter or phrase (`A`, `Ñ`, `I'm fine`). The folder name is made from it
+  (`a`, `enye`, `im-fine`; `word_to_label()` in `label_text.py`) and the typed text is kept in
+  `text.txt` in that word's folder (the first text is kept; edit the file to change it).
+  `train.py` copies those texts into the model's `display_names.json` and the training report.
+  The Record tab's list offers the alphabet (A-Z, Ñ, NG), `rest`, and the words already
+  recorded in the session; the old suggested Filipino word list was removed.
+- Verified in the sandbox only: unit and GUI-core tests, training smoke test, `train.py` on
+  synthetic data with typed words (wrote `display_names.json`; the hub loader showed A, Ñ,
+  I'm fine, rest, Sorry, I don't understand), `collect_gesture.py --simulate --label "I'm
+  fine"`, and the Record tab on a virtual screen (simulated glove). Not yet run on the Pi.

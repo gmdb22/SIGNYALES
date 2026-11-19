@@ -175,6 +175,19 @@ with tempfile.TemporaryDirectory() as tmp:
     rec = recorder.GestureRecorder(tmp)
     check("recorder: bad labels rejected", recorder.check_label("Salamat") is not None
           and recorder.check_label("salamat") is None and recorder.check_label("rest") is None)
+    sess = Path(tmp) / "W01_S09"
+    for word in ("A", "I'm fine"):
+        lab = recorder.word_to_label(word)
+        (sess / lab).mkdir(parents=True)
+        np.savez(sess / lab / "rep_0000.npz", features=np.zeros((W, 24), np.float32), label=lab)
+        recorder.save_word_text(sess / lab, word)
+    (sess / "rest").mkdir()
+    np.savez(sess / "rest" / "rep_0000.npz", features=np.zeros((W, 24), np.float32), label="rest")
+    (sess / "empty").mkdir()
+    check("recorder: recorded words listed as typed (text.txt, else from the folder name)",
+          recorder.recorded_words(sess) == ["A", "I'm fine", "rest"], recorder.recorded_words(sess))
+    check("recorder: alphabet offered has 28 letters incl. Ñ and NG",
+          len(recorder.FSL_ALPHABET) == 28 and recorder.FSL_ALPHABET[-2:] == ["Ñ", "NG"])
     check("recorder: fixed-length by default, one rep = the model window (D1)",
           rec.fixed_length and rec.target_frames == W)
     rec.start_rep()

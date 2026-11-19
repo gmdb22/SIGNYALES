@@ -19,8 +19,6 @@ from core.live import LivePipeline, event_text, load_classifier, make_source
 from core.procs import ProcessRunner
 from widgets import MUTED, OK, BAD, FullscreenSubtitles, HandStatus, LogBox, SubtitlePanel
 
-SUGGESTED_WORDS = ["kumusta", "salamat", "oo", "hindi", "tulong", "paalam", "pasensya",
-                   "tubig", "banyo", "guro", "rest"]
 
 
 class RecentWords(ttk.Frame):
@@ -288,8 +286,9 @@ class PiActiveView(ttk.Frame):
         word = ttk.Frame(tab)
         word.pack(fill="x", pady=8)
         ttk.Label(word, text="2. Word:", font=("Segoe UI", 11, "bold")).pack(side="left")
-        self.k_word = ttk.Combobox(word, values=SUGGESTED_WORDS, width=16, font=("Segoe UI", 12))
-        self.k_word.set("salamat")
+        self.k_word = ttk.Combobox(word, values=recorder.FSL_ALPHABET + ["rest"], width=24,
+                                   font=("Segoe UI", 12), postcommand=self._refresh_word_list)
+        self.k_word.set("A")
         self.k_word.pack(side="left", padx=6)
         self.k_word.bind("<<ComboboxSelected>>", lambda e: self._update_counts())
         self.k_word.bind("<KeyRelease>", lambda e: self._update_counts())
@@ -299,6 +298,10 @@ class PiActiveView(ttk.Frame):
                     command=self._update_counts).pack(side="left")
         self.k_count = ttk.Label(word, text="", font=("Segoe UI", 11))
         self.k_count.pack(side="left", padx=12)
+        ttk.Label(tab, text="Type the word, letter or phrase exactly as it should appear and be "
+                            "spoken (e.g. A, Ñ, I'm fine). Pick 'rest' for the hand doing nothing. "
+                            "The list shows the alphabet and the words already recorded here.",
+                  foreground=MUTED, wraplength=900).pack(anchor="w")
 
         self.k_button = tk.Button(tab, text="3. START repetition  (Space)", font=("Segoe UI", 16, "bold"),
                                   bg="#2f7a4f", fg="white", activebackground="#25613e", height=2,
@@ -359,14 +362,27 @@ class PiActiveView(ttk.Frame):
             self.k_button.configure(state="disabled", text="3. START repetition  (Space)", bg="#2f7a4f")
             self.k_hands.reset()
 
+    def _typed_word(self):
+        """(text as typed, folder name) for the word box; folder is None if unusable."""
+        text = " ".join(self.k_word.get().split())
+        return text, recorder.word_to_label(text)
+
+    def _refresh_word_list(self):
+        done = recorder.recorded_words(self._out_dir())
+        rest = [w for w in recorder.FSL_ALPHABET + ["rest"] if w not in done]
+        self.k_word.configure(values=done + rest)
+
     def _update_counts(self):
-        label = self.k_word.get().strip()
-        if recorder.check_label(label):
-            self.k_count.configure(text="(invalid word name)", foreground=BAD)
+        text, label = self._typed_word()
+        if label is None:
+            self.k_count.configure(text="(type a word with at least one letter or digit)", foreground=BAD)
             return
         n = recorder.count_reps(self._out_dir(), label)
         target = self.k_target.get()
-        self.k_count.configure(text=f"{n} / {target} recorded", foreground=OK if n >= target else MUTED)
+        shown = recorder.read_word_text(self._out_dir() / label) or text
+        extra = f"   shown as \"{shown}\", folder {label}" if shown != label else ""
+        self.k_count.configure(text=f"{n} / {target} recorded{extra}",
+                               foreground=OK if n >= target else MUTED)
 
     def toggle_rep(self):
         if not self.recorder or not (self.pipeline and self.pipeline.running):
@@ -375,13 +391,13 @@ class PiActiveView(ttk.Frame):
         if now - self._last_toggle < 0.35:
             return       # a second trigger from the same press (e.g. button + Space shortcut together)
         self._last_toggle = now
-        label = self.k_word.get().strip()
-        err = recorder.check_label(label)
-        if err:
-            messagebox.showwarning("Word name", err)
+        text, label = self._typed_word()
+        if label is None and not self.recorder.recording:
+            messagebox.showwarning("Word", "Type the word first: it needs at least one letter or digit.")
             return
         if not self.recorder.recording:
             self._rep_label = label
+            self._rep_text = text
             self.recorder.start_rep()
             self._rep_started = now
             self.k_button.configure(text="RECORDING... sign now  (Space = discard)", bg="#b3412c",
@@ -419,13 +435,19 @@ class PiActiveView(ttk.Frame):
         self.app.after(50, self._poll_rep)
 
     def _finish_rep(self):
-        label = getattr(self, "_rep_label", None) or self.k_word.get().strip()
+        label = getattr(self, "_rep_label", None) or self._typed_word()[1]
         elapsed = time.monotonic() - self._rep_started
         frames = self.recorder.frame_count
         try:
             path, frames = self.recorder.stop_rep(label)
-            self.k_log.append(f"Saved {path.name} for '{label}' ({frames} frames, "
+            typed = getattr(self, "_rep_text", None) or label
+            shown = recorder.save_word_text(path.parent, typed)
+            self.k_log.append(f"Saved {path.name} for \"{shown}\" ({frames} frames, "
                               f"{frames / 50:.1f} s)", "pass")
+            if shown != typed:
+                self.k_log.append(f"This folder already shows as \"{shown}\" (kept). To change it, "
+                                  f"edit {path.parent / 'text.txt'}", "muted")
+            self._update_counts()
         except ValueError as exc:
             if frames == 0:
                 self.k_log.append(f"Not saved: no glove data reached the recorder (0 frames in "

@@ -54,6 +54,7 @@ APP_MODEL_DIR = PI_SIDE_DIR / "model"
 # so importing it here is cheap.
 sys.path.append(str(PI_SIDE_DIR))
 from signyales_hub.config import HubConfig  # noqa: E402
+from signyales_hub.label_text import DISPLAY_NAMES_FILE, collect_word_texts  # noqa: E402
 
 
 # The 70/15/15 stratified split needs every word in every part. 10 recordings
@@ -245,6 +246,19 @@ def main():
         representative_data=X_train_n if args.quantize else None,
     )
 
+    # The words as typed in the Record tab / collect_gesture.py (text.txt in
+    # each word folder) become the model's display_names.json, so Recognize
+    # shows and speaks them exactly. Folders without text.txt use the rules
+    # in signyales_hub/label_text.py.
+    word_texts = collect_word_texts(args.data_dir, labels)
+    names_path = out_dir / DISPLAY_NAMES_FILE
+    if word_texts:
+        with open(names_path, "w", encoding="utf-8") as f:
+            json.dump(word_texts, f, indent=2, ensure_ascii=False)
+        print(f"Wrote {DISPLAY_NAMES_FILE} ({len(word_texts)} of {len(labels)} words have typed text)")
+    elif names_path.exists():
+        print(f"Kept the existing {DISPLAY_NAMES_FILE} in {out_dir} (no word folder has text.txt)")
+
     agreement = runtime_agreement(out_dir, X_test, y_pred, labels, cfg)
     if agreement["loaded"]:
         print(f"Hub runtime check: exported model agrees with Keras on "
@@ -272,6 +286,7 @@ def main():
         "data": {
             "data_dir": str(Path(args.data_dir).resolve()),
             "labels": labels,
+            "display_names": word_texts,
             "samples_per_label": {lbl: int((y == i).sum()) for i, lbl in enumerate(labels)},
             "skipped_folders": [d.name for d in skipped_dirs],
             "window_size": int(X.shape[1]),

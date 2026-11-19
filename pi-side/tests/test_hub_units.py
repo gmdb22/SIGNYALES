@@ -222,6 +222,26 @@ with tempfile.TemporaryDirectory() as tmp:
     clf = GestureClassifier(tmp)
     check("model: display_text works without a model", clf.display_text("im-fine") == "I'm fine")
 
+# ------------------------------------------------- typed word -> folder name
+from signyales_hub.label_text import (collect_word_texts, read_word_text,  # noqa: E402
+                                      save_word_text, word_to_label)
+cases = {"A": "a", "NG": "ng", "Ñ": "enye", "Niño": "ninyo", "I'm fine": "im-fine",
+         "I\u2019m fine": "im-fine", "Sorry, I don't understand": "sorry-i-dont-understand",
+         " Magandang  umaga ": "magandang-umaga", "Kumusta?": "kumusta", "rest": "rest",
+         "!!!": None, "": None, None: None}
+got = {k: word_to_label(k) for k in cases}
+check("word_to_label: letters, Ñ, phrases, punctuation, empty", got == cases, got)
+with tempfile.TemporaryDirectory() as tmp:
+    d = Path(tmp) / "a"
+    check("word text: first save keeps what was typed", save_word_text(d, "A") == "A"
+          and read_word_text(d) == "A")
+    check("word text: a later different spelling does not replace it",
+          save_word_text(d, "a") == "A" and read_word_text(d) == "A")
+    check("word text: replace=True does", save_word_text(d, "Letter A", replace=True) == "Letter A")
+    (Path(tmp) / "rest").mkdir()
+    check("word text: collected for train.py, folders without text.txt left out",
+          collect_word_texts(tmp, ["a", "rest"]) == {"a": "Letter A"})
+
 # ------------------------------------------------- performance_logger helper
 perf = load_tool("performance_logger")
 vals = list(range(1, 101))

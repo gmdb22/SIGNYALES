@@ -161,9 +161,11 @@ python training/tests/test_train_smoke.py      (from the repo root)
   split (never on validation/test — that would leak test statistics into
   training and make reported accuracy look better than it really is)
 
-Optional fourth file, written by hand, not by training: **`display_names.json`**
-in the model folder, for the words shown and spoken when a label is recognized,
-e.g. `{"im-fine": "I'm fine", "deaf": "Deaf"}`. Without it the hub makes the
+Optional fourth file: **`display_names.json`** in the model folder, the words
+shown and spoken when a label is recognized, e.g. `{"im-fine": "I'm fine"}`.
+`train.py` writes it from the `text.txt` that the Record tab and
+`collect_gesture.py` keep in each word folder (the word as it was typed, e.g.
+`A`, `Ñ`, `I'm fine`); it can also be edited by hand. Without it the hub makes the
 text from the label (`-` and `_` become spaces; `i`, `im`, `dont` become `I`,
 `I'm`, `don't`; `sorry-i-dont-understand` becomes "sorry, I don't
 understand"). See `pi-side/signyales_hub/label_text.py`. Labels in

@@ -29,6 +29,11 @@ Usage:
     python tools/collect_gesture.py --label kumusta --reps 20 \\
         --out ../training/data
 
+    # A letter or phrase: type it as it should appear; quote it if it has
+    # spaces. The folder is made from it (A -> a, "I'm fine" -> im-fine) and
+    # the typed text is kept in that folder's text.txt (19 Nov 2026).
+    python tools/collect_gesture.py --label "I'm fine" --reps 20 --out ../training/data
+
     # Dry run of the TOOL itself (not for building a real dataset):
     python tools/collect_gesture.py --label test --reps 3 --simulate
 """
@@ -43,6 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 
 from signyales_hub.config import HubConfig  # noqa: E402
+from signyales_hub.label_text import save_word_text, word_to_label  # noqa: E402
 from signyales_hub.serial_link import SimulatedFrameSource, open_receiver  # noqa: E402
 from signyales_hub.windowing import extract_features  # noqa: E402
 
@@ -141,7 +147,9 @@ def record_one_repetition(source_iter, window_size: int) -> np.ndarray:
 
 def main():
     p = argparse.ArgumentParser(description="Record labeled gesture windows for training")
-    p.add_argument("--label", required=True, help="Gesture label, e.g. 'kumusta'")
+    p.add_argument("--label", required=True,
+                   help="The word as it should appear, e.g. kumusta, A, \"I'm fine\" (quote it if it "
+                        "has spaces). The folder name is made from it.")
     p.add_argument("--reps", type=int, default=20, help="Number of repetitions to record")
     p.add_argument("--out", default="../training/data", help="Output data root directory")
     p.add_argument("--port", default=None)
@@ -158,8 +166,16 @@ def main():
     if args.baud:
         cfg.serial_baud = args.baud
 
+    typed = args.label
+    args.label = word_to_label(typed)
+    if args.label is None:
+        p.error(f"--label {typed!r} has no letters or digits to make a folder name from")
     label_dir = Path(args.out) / args.label
     label_dir.mkdir(parents=True, exist_ok=True)
+    shown = save_word_text(label_dir, typed)
+    if shown != typed:
+        print(f"Note: this folder already shows as {shown!r} (kept). Edit {label_dir / 'text.txt'} "
+              "to change it.")
     start_index = len(list(label_dir.glob("rep_*.npz")))
 
     if args.simulate:
@@ -170,7 +186,7 @@ def main():
         source = open_receiver(cfg)
 
     n = cfg.window_size_samples
-    print(f"Recording gesture '{args.label}': {args.reps} repetitions -> {label_dir}")
+    print(f"Recording gesture {shown!r} (folder {args.label}): {args.reps} repetitions -> {label_dir}")
     source_iter = iter(source)
     background = None if args.variable else BackgroundFrames(source_iter)
     if background:

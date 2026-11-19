@@ -23,7 +23,6 @@ No Tk imports.
 """
 
 import importlib.util
-import re
 import threading
 from pathlib import Path
 
@@ -33,8 +32,12 @@ from .env import PI_SIDE, ensure_pi_side_on_path
 
 ensure_pi_side_on_path()
 from signyales_hub.config import HubConfig  # noqa: E402
+from signyales_hub.label_text import (LABEL_RE, label_to_text, read_word_text,  # noqa: E402,F401
+                                      save_word_text, word_to_label)
 
-LABEL_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
+# Offered in the Record tab's word box (19 Nov 2026: one right glove, the FSL
+# alphabet plus one-handed words still being chosen; any word can be typed).
+FSL_ALPHABET = [chr(c) for c in range(ord("A"), ord("Z") + 1)] + ["Ñ", "NG"]
 
 
 def _load_resample():
@@ -51,9 +54,23 @@ resample_to_fixed_length = _load_resample()
 def check_label(label: str):
     """Returns an error message, or None if the label is usable as a folder name."""
     if not LABEL_RE.match(label or ""):
-        return ("Use lowercase letters, digits, '-' or '_' only, starting with a letter or digit "
-                "(e.g. salamat, rest). The folder name is the word the system speaks.")
+        return ("Folder names use lowercase letters, digits, '-' or '_' only, starting with a "
+                "letter or digit (e.g. salamat, rest, im-fine). word_to_label() makes one from "
+                "any typed word.")
     return None
+
+
+def recorded_words(out_dir):
+    """The words already recorded in a session folder, as they are shown
+    (text.txt, else made from the folder name), sorted by folder name."""
+    out_dir = Path(out_dir)
+    if not out_dir.is_dir():
+        return []
+    words = []
+    for d in sorted(p for p in out_dir.iterdir() if p.is_dir() and not p.name.startswith(("_", "."))):
+        if any(d.glob("rep_*.npz")):
+            words.append(read_word_text(d) or label_to_text(d.name))
+    return words
 
 
 def count_reps(out_dir, label) -> int:
