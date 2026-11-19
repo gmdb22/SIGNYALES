@@ -17,8 +17,16 @@
   ESP32-DevKitC-32E clone). Installed via Boards Manager: esp32 by
   Espressif Systems.
 
+  Flex calibration (19 Nov 2026): SEND_RAW_FLEX is 1, so the glove sends
+  its flex readings uncalibrated and the Raspberry Pi calibrates them over
+  the wireless link (GUI: Calibrate glove tab, or the laptop's Mirror tab;
+  pi-side/signyales_hub/calibration.py). No USB cable needed. Set it to 0 to
+  go back to the glove calibrating itself with 'c'.
+
   Serial commands (115200 baud):
     'c'  -> run an 8-second flex calibration routine and save to flash
+            (with SEND_RAW_FLEX 1: only prints each sensor's range, useful
+            for checking wiring; the values sent are not changed)
     'g'  -> measure the gyro's resting offset again (keep the glove still
             for 1 second) and save it to flash
 */
@@ -27,6 +35,11 @@
 #include <esp_now.h>
 #include <Wire.h>
 #include <Preferences.h>
+
+// 1: send raw flex readings; the Pi calibrates (wireless). 0: old behaviour.
+#ifndef SEND_RAW_FLEX
+#define SEND_RAW_FLEX 1
+#endif
 
 #include "config.h"
 #include "packet.h"
@@ -496,6 +509,10 @@ void setupEspNow() {
 // Maps a raw ADC reading to a normalized 0-4095 range using this
 // finger's stored calibration bounds, clamped at the edges.
 uint16_t normalizeFlex(int fingerIndex, uint16_t raw) {
+#if SEND_RAW_FLEX
+  (void)fingerIndex;
+  return raw; // the Pi applies the calibration (calibration.py)
+#else
   uint16_t lo = flexMin[fingerIndex];
   uint16_t hi = flexMax[fingerIndex];
   if (hi <= lo) return raw; // calibration not run yet — fall back to raw value
@@ -503,6 +520,7 @@ uint16_t normalizeFlex(int fingerIndex, uint16_t raw) {
   if (normalized < 0) normalized = 0;
   if (normalized > 4095) normalized = 4095;
   return (uint16_t)normalized;
+#endif
 }
 
 void readFlexSensors(uint16_t* out) {
@@ -530,7 +548,12 @@ void setup() {
 
   Serial.printf("Signyales glove firmware starting. This unit: %s\n",
                 IS_LEFT_GLOVE ? "LEFT" : "RIGHT");
+#if SEND_RAW_FLEX
+  Serial.println("Flex values are sent RAW: calibrate on the Pi (GUI > Calibrate glove), no USB needed.");
+  Serial.println("'c' only prints each sensor's range (wiring check),");
+#else
   Serial.println("Send 'c' over Serial at any time to (re)run flex calibration,");
+#endif
   Serial.println("or 'g' to measure the gyro's resting offset again (glove still).");
 
   analogReadResolution(12); // 0-4095, matches packet.h's assumed range

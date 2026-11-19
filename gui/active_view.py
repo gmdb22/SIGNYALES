@@ -12,7 +12,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-from core import hardware, mirror, recorder, tasks
+from core import calibrate, hardware, mirror, recorder, tasks
 from core.env import (IS_WINDOWS, PI_SIDE, find_tool, is_raspberry_pi, receiver_link,
                       save_receiver_link, uart_port)
 from core.live import LivePipeline, event_text, load_classifier, make_source
@@ -52,10 +52,14 @@ class PiActiveView(ttk.Frame):
         nb.pack(fill="both", expand=True, padx=8, pady=8)
         self.recognize_tab = ttk.Frame(nb)
         self.record_tab = ttk.Frame(nb)
+        self.calibrate_tab = ttk.Frame(nb)
         nb.add(self.recognize_tab, text="  Recognize  ")
         nb.add(self.record_tab, text="  Record (teach the model)  ")
+        nb.add(self.calibrate_tab, text="  Calibrate glove  ")
         self._build_recognize(self.recognize_tab)
         self._build_record(self.record_tab)
+        self._build_calibrate(self.calibrate_tab)
+        self._show_active_calibration()
 
     # ---------------------------------------------------------------- shared controls
     def _port_row(self, parent, row):
@@ -103,9 +107,28 @@ class PiActiveView(ttk.Frame):
             return False
         self.pipeline = LivePipeline(lambda: make_source(port=port or None, simulate=simulate, link=link),
                                      lambda: load_classifier(model_dir),
-                                     lambda e: self.app.call(on_event, e))
+                                     lambda e: self.app.call(self._route_event, on_event, e),
+                                     calibration=calibrate.cal_files.load_active())
         self.pipeline.start()
         return True
+
+    def _route_event(self, on_event, e):
+        """Calibration events go to the Calibrate tab (whichever tab connected);
+        everything else to that tab, with the live bars also shown on Calibrate."""
+        t = e.get("type")
+        if t == "calibration":
+            if e.get("state") == "done":
+                e = calibrate.finish(self.pipeline, e)
+            self._show_calibration_event(e)
+            return
+        if t == "status":
+            self.c_hands.update_status(e)
+        elif t == "stopped":
+            self.c_hands.reset()
+            self.c_state.configure(text="Not reading the gloves.", foreground=MUTED)
+        elif t == "started":
+            self.c_state.configure(text="Reading the gloves. Ready to calibrate.", foreground=OK)
+        on_event(e)
 
     def stop_pipeline(self):
         if self.pipeline and self.pipeline.running:
@@ -178,6 +201,8 @@ class PiActiveView(ttk.Frame):
         if t == "started":
             if e.get("port"):
                 self.r_log.append(f"Reading the receiver on {e['port']} ({e.get('link', '')} link).", "muted")
+            self.r_log.append("Flex calibration: " + (e.get("calibration") or
+                              "none (values used as they arrive; see the Calibrate glove tab)"), "muted")
             if e["model"]:
                 words = ", ".join(e.get("texts") or e["labels"])
                 self.r_state.configure(text="Running. Words: " + words, foreground=OK)
@@ -233,8 +258,9 @@ class PiActiveView(ttk.Frame):
     def _toggle_share(self):
         if self.r_share.get():
             try:
-                self.server = mirror.MirrorServer(on_clients_changed=lambda n: self.app.call(
-                    self._update_share_label, n))
+                self.server = mirror.MirrorServer(
+                    on_clients_changed=lambda n: self.app.call(self._update_share_label, n),
+                    on_command=lambda cmd: self.app.call(self._mirror_command, cmd))
                 self.server.start()
             except OSError as exc:
                 self.r_share.set(False)
@@ -282,6 +308,8 @@ class PiActiveView(ttk.Frame):
         ttk.Button(conn, text="Disconnect", command=self.stop_pipeline).pack(side="left", padx=6)
         self.k_state = ttk.Label(conn, text="Not connected.", foreground=MUTED)
         self.k_state.pack(side="left", padx=10)
+        self.k_cal = ttk.Label(tab, text="", foreground=MUTED)
+        self.k_cal.pack(anchor="w")
 
         word = ttk.Frame(tab)
         word.pack(fill="x", pady=8)
@@ -342,6 +370,14 @@ class PiActiveView(ttk.Frame):
             return                       # keep the existing recorder attached
         self.recorder = recorder.GestureRecorder(out)
         self.pipeline.add_frame_listener(self.recorder.on_frame)
+        active = self.pipeline.calibration
+        signer = self.k_signer.get().strip()
+        if active is None:
+            self.k_log.append("No flex calibration is active. Calibrate this signer first (Calibrate glove "
+                              "tab), so recording and recognition use the same scale.", "fail")
+        elif active.signer != signer:
+            self.k_log.append(f"The active calibration is {active.signer!r}, but you are recording as "
+                              f"{signer!r}. Calibrate {signer} (or use their saved calibration) first.", "fail")
         self.record_tab.focus_set()      # take keyboard focus off the Connect button
         self.k_state.configure(text=f"Connecting... saving to {out}", foreground=MUTED)
         self._update_counts()
@@ -440,6 +476,9 @@ class PiActiveView(ttk.Frame):
         frames = self.recorder.frame_count
         try:
             path, frames = self.recorder.stop_rep(label)
+            note = calibrate.note_session(self._out_dir(), self.pipeline.calibration if self.pipeline else None)
+            if note:
+                self.k_log.append(note, "fail")
             typed = getattr(self, "_rep_text", None) or label
             shown = recorder.save_word_text(path.parent, typed)
             self.k_log.append(f"Saved {path.name} for \"{shown}\" ({frames} frames, "
@@ -489,6 +528,115 @@ class PiActiveView(ttk.Frame):
             self.k_log.append("Repetition cancelled (not saved).", "muted")
             self.k_button.configure(text="3. START repetition  (Space)", bg="#2f7a4f")
 
+    # ---------------------------------------------------------------- Calibrate (wireless)
+    def _build_calibrate(self, tab):
+        ttk.Label(tab, text="Calibrates the flex sensors over the wireless link: no USB cable. Do it for "
+                            "each signer before recording, and after moving or re-taping a sensor. Needs the "
+                            "glove firmware that sends uncalibrated values (19 Nov 2026 or later).",
+                  foreground=MUTED, wraplength=900).pack(anchor="w", pady=(4, 6))
+        ctl = ttk.Frame(tab)
+        ctl.pack(fill="x")
+        self.c_port = self._port_row(ctl, 0)
+        self.c_sim = tk.BooleanVar(value=not is_raspberry_pi())
+        ttk.Checkbutton(ctl, text="Fake glove data (tool test only)", variable=self.c_sim).grid(
+            row=0, column=2, sticky="w", padx=8)
+        ttk.Label(ctl, text="Signer code:").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Entry(ctl, textvariable=self.k_signer, width=8).grid(row=1, column=1, sticky="w", padx=4)
+        ttk.Label(ctl, text="(same code as the Record tab; codes only, never names)",
+                  foreground=MUTED).grid(row=1, column=1, sticky="w", padx=(80, 0))
+
+        btns = ttk.Frame(tab)
+        btns.pack(fill="x", pady=6)
+        self.c_button = tk.Button(btns, text="Calibrate (8 s)", font=("Segoe UI", 13, "bold"),
+                                  bg="#2f7a4f", fg="white", activebackground="#25603e",
+                                  command=self.calibrate_now, padx=16, pady=6)
+        self.c_button.pack(side="left")
+        ttk.Button(btns, text="Disconnect", command=self.stop_pipeline).pack(side="left", padx=6)
+        ttk.Label(btns, text="Saved:").pack(side="left", padx=(18, 2))
+        self.c_saved = ttk.Combobox(btns, width=10, postcommand=self._refresh_saved_signers)
+        self.c_saved.pack(side="left")
+        ttk.Button(btns, text="Use this signer's saved calibration",
+                   command=self.use_saved_calibration).pack(side="left", padx=6)
+        self.c_state = ttk.Label(tab, text="Not reading the gloves.", foreground=MUTED)
+        self.c_state.pack(anchor="w")
+        self.c_active = ttk.Label(tab, text="", font=("Segoe UI", 11))
+        self.c_active.pack(anchor="w", pady=(2, 0))
+        self.c_big = ttk.Label(tab, text="", font=("Segoe UI", 20, "bold"))
+        self.c_big.pack(anchor="w", pady=6)
+        low = ttk.Frame(tab)
+        low.pack(fill="both", expand=True)
+        self.c_hands = HandStatus(low)
+        self.c_hands.pack(side="left", anchor="n")
+        self.c_log = LogBox(low, height=12)
+        self.c_log.pack(side="left", fill="both", expand=True, padx=8)
+
+    def _refresh_saved_signers(self):
+        self.c_saved.configure(values=calibrate.cal_files.list_signers())
+
+    def calibrate_now(self):
+        signer = self.k_signer.get().strip()
+        err = calibrate.check_signer(signer)
+        if err:
+            messagebox.showwarning("Signer code", err)
+            return
+        if not (self.pipeline and self.pipeline.running and not self.pipeline.stopping):
+            # Nothing is reading the gloves yet: connect just for calibrating (no model).
+            if not self._start_pipeline(None, lambda e: None, simulate=self.c_sim.get(),
+                                        port=self.c_port.get().strip()):
+                return
+            self.c_state.configure(text="Connecting...", foreground=MUTED)
+            self.after(1500, lambda: self._show_calibration_event(calibrate.start(self.pipeline, signer)))
+            return
+        self._show_calibration_event(calibrate.start(self.pipeline, signer))
+
+    def use_saved_calibration(self):
+        signer = self.c_saved.get().strip() or self.k_signer.get().strip()
+        self._show_calibration_event(calibrate.use(self.pipeline, signer))
+
+    def _mirror_command(self, cmd):
+        ev = calibrate.handle_command(self.pipeline, cmd)
+        if ev is not None:
+            self.c_log.append(f"Laptop asked: {cmd.get('cmd')} {cmd.get('signer', '')}".rstrip(), "muted")
+            self._show_calibration_event(ev)
+
+    def _show_active_calibration(self):
+        active = calibrate.cal_files.load_active()
+        text = ("Active calibration: " + active.describe()) if active else \
+               "Active calibration: none (flex values are used as they arrive)"
+        self.c_active.configure(text=text)
+        self.k_cal.configure(text=text)
+
+    def _show_calibration_event(self, e):
+        """Shows a calibration event here and sends it to connected laptops."""
+        if self.server:
+            self.server.publish(e)
+        state = e.get("state")
+        if state == "started":
+            self.c_button.configure(state="disabled")
+            self.c_big.configure(text=f"Calibrating {e['signer']}: 8 s", foreground=OK)
+            self.c_log.append(calibrate.HOW_TO, "muted")
+        elif state == "running":
+            self.c_big.configure(text=f"Calibrating {e['signer']}: {e['seconds_left']:.0f} s", foreground=OK)
+        elif state in ("saved", "active"):
+            self.c_button.configure(state="normal")
+            if state == "saved":
+                good = e.get("all_ok")
+                self.c_big.configure(text=f"Saved for {e['signer']}" + ("" if good else
+                                     ": some sensors barely moved"), foreground=OK if good else BAD)
+            else:
+                self.c_big.configure(text=f"Using {e['signer']}'s saved calibration", foreground=OK)
+            for line in calibrate.describe_rows(e.get("rows", {})):
+                self.c_log.append(line, "fail" if "TOO SMALL" in line else None)
+            self._show_active_calibration()
+            for log in (self.r_log, self.k_log):
+                log.append(f"Flex calibration now: {e.get('describe', e['signer'])}", "muted")
+        elif state in ("failed", "error"):
+            self.c_button.configure(state="normal")
+            self.c_big.configure(text="Not calibrated", foreground=BAD)
+            self.c_log.append(e.get("message", ""), "fail")
+        elif state == "list":
+            self.c_log.append("Saved calibrations: " + (", ".join(e.get("signers", [])) or "none"), "muted")
+
     def shutdown(self):
         self.app.unbind("<KeyPress-space>")
         self.app.unbind("<KeyRelease-space>")
@@ -533,7 +681,21 @@ class LaptopActiveView(ttk.Frame):
                                            "start recognition, then type the address it shows here.",
                                  foreground=MUTED)
         self.m_state.pack(anchor="w")
-        self.m_subtitle = SubtitlePanel(tab, idle_text="Not connected", height=260)
+        cal = ttk.Frame(tab)
+        cal.pack(fill="x", pady=(6, 0))
+        ttk.Label(cal, text="Glove calibration (wireless, done by the Pi):").pack(side="left")
+        ttk.Label(cal, text="Signer code:").pack(side="left", padx=(8, 2))
+        self.m_signer = tk.StringVar(value="W01")
+        ttk.Entry(cal, textvariable=self.m_signer, width=8).pack(side="left")
+        self.m_cal_button = ttk.Button(cal, text="Calibrate (8 s)",
+                                       command=lambda: self._mirror_send("calibrate"))
+        self.m_cal_button.pack(side="left", padx=6)
+        ttk.Button(cal, text="Use saved", command=lambda: self._mirror_send("use_calibration")).pack(side="left")
+        ttk.Button(cal, text="List saved", command=lambda: self._mirror_send("calibration_list")).pack(
+            side="left", padx=6)
+        self.m_cal_big = ttk.Label(tab, text="", font=("Segoe UI", 16, "bold"))
+        self.m_cal_big.pack(anchor="w")
+        self.m_subtitle = SubtitlePanel(tab, idle_text="Not connected", height=230)
         self.m_subtitle.pack(fill="x", pady=8)
         low = ttk.Frame(tab)
         low.pack(fill="both", expand=True)
@@ -541,6 +703,8 @@ class LaptopActiveView(ttk.Frame):
         self.m_hands.pack(side="left", anchor="n")
         self.m_recent = RecentWords(low)
         self.m_recent.pack(side="right", fill="y")
+        self.m_log = LogBox(low, height=8)
+        self.m_log.pack(side="left", fill="both", expand=True, padx=8)
 
     def toggle_mirror(self):
         if self.client:
@@ -566,6 +730,47 @@ class LaptopActiveView(ttk.Frame):
         self.m_subtitle.idle_text = "Listening..."
         self.m_subtitle.idle()
 
+    def _mirror_send(self, what):
+        """Asks the Pi to calibrate (or use / list saved calibrations) over the mirror link."""
+        if not self.client:
+            messagebox.showinfo("Not connected", "Connect to the Pi first (Pi: Recognize, tick 'Share with "
+                                "a laptop', start recognition; or the kiosk with sharing on).")
+            return
+        signer = self.m_signer.get().strip()
+        if what != "calibration_list":
+            err = calibrate.check_signer(signer)
+            if err:
+                messagebox.showwarning("Signer code", err)
+                return
+        try:
+            self.client.send({"type": "command", "cmd": what, "signer": signer})
+        except OSError as exc:
+            self.m_log.append(f"Could not send to the Pi: {exc}", "fail")
+            return
+        self.m_log.append(f"Asked the Pi: {what.replace('_', ' ')} {signer}".rstrip(), "muted")
+
+    def _mirror_calibration(self, e):
+        state = e.get("state")
+        if state == "started":
+            self.m_cal_big.configure(text=f"Calibrating {e['signer']}: 8 s", foreground=OK)
+            self.m_log.append(e.get("how_to", ""), "muted")
+        elif state == "running":
+            self.m_cal_big.configure(text=f"Calibrating {e['signer']}: {e['seconds_left']:.0f} s", foreground=OK)
+        elif state in ("saved", "active"):
+            good = e.get("all_ok", True)
+            self.m_cal_big.configure(
+                text=(f"Saved for {e['signer']}" if state == "saved" else f"Using {e['signer']}'s calibration")
+                + ("" if good else ": some sensors barely moved"), foreground=OK if good else BAD)
+            for line in calibrate.describe_rows(e.get("rows", {}), e.get("min_range", 500)):
+                self.m_log.append(line, "fail" if "TOO SMALL" in line else None)
+        elif state in ("failed", "error"):
+            self.m_cal_big.configure(text="Not calibrated", foreground=BAD)
+            self.m_log.append(e.get("message", ""), "fail")
+        elif state == "list":
+            self.m_log.append("Saved on the Pi: " + (", ".join(e.get("signers", [])) or "none")
+                              + (f". Active: {e['describe']}" if e.get("describe") else ". None active."),
+                              "muted")
+
     def _mirror_disconnected(self, reason):
         self.client = None
         self.m_connect.configure(text="Connect")
@@ -587,9 +792,13 @@ class LaptopActiveView(ttk.Frame):
                 self.app.speaker.say(text)
         elif t == "status":
             self.m_hands.update_status(e)
+        elif t == "calibration":
+            self._mirror_calibration(e)
         elif t == "started":
             words = ", ".join(e.get("texts") or e.get("labels", [])) or "no model"
             self.m_state.configure(text=f"Pi is recognizing. Words: {words}", foreground=OK)
+            if "calibration" in e:
+                self.m_log.append("Flex calibration on the Pi: " + (e["calibration"] or "none"), "muted")
         elif t == "stopped":
             self.m_state.configure(text="Pi stopped recognition (still connected).", foreground=MUTED)
             self.m_hands.reset()

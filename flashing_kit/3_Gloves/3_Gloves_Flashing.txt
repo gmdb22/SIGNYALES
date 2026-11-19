@@ -84,14 +84,13 @@ what was found on the I2C bus) and send them to Claude.
 Keep the glove still for the first 2 seconds after power-on: the firmware
 measures the gyro's resting offset then (line "Gyro offset: ..."). If it
 says the glove moved, send g with the glove still to measure it again.
-In the monitor, send c (GUI: the "Send 'c' (calibrate glove)" button).
-For 8 seconds, bend and straighten all 5 fingers and the palm repeatedly.
-It prints:
-    Sensor 0 (thumb): min=... max=...
-    ...
-    Sensor 5 (palm): min=... max=...
-A healthy sensor has a spread of several hundred or more. Before the
-rework, small spreads are expected.
+Flex calibration is no longer done here (19 Nov 2026): the glove sends raw
+values and the Pi calibrates them wirelessly. After flashing, unplug USB, put
+the glove on its battery, and use the GUI on the Pi: Active > Calibrate glove
+(or, from the laptop, Mirror the Pi > Calibrate). Optional wiring check while
+still on USB: send c in the monitor and bend everything for 8 seconds; it
+prints each sensor's min/max (a healthy sensor spreads 500 or more) but
+changes nothing that is sent.
 
 
 3.6 CHECK THE RECEIVER SEES THE GLOVES

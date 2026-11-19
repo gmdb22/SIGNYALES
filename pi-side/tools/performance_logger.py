@@ -54,6 +54,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from signyales_hub.config import HubConfig  # noqa: E402
+from signyales_hub.calibration import apply_to_stream, load_active  # noqa: E402
 from signyales_hub.serial_link import SimulatedFrameSource, open_receiver  # noqa: E402
 from signyales_hub.windowing import WindowBuffer, extract_features  # noqa: E402
 from signyales_hub.model_runtime import GestureClassifier  # noqa: E402
@@ -125,8 +126,10 @@ def main():
     start_time = time.monotonic()
     print(f"Logging performance for up to {args.duration:.0f}s. Ctrl+C to stop early.\n")
 
+    calibration = load_active()
+    print("Flex calibration: " + (calibration.describe() if calibration else "none (values used as they arrive)"))
     try:
-        for frame in source:
+        for frame in apply_to_stream(source, calibration):
             now = time.monotonic()
             if now - start_time > args.duration:
                 break

@@ -32,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 
 from signyales_hub.config import HubConfig  # noqa: E402
+from signyales_hub.calibration import apply_to_stream, load_active  # noqa: E402
 from signyales_hub.serial_link import SimulatedFrameSource, open_receiver  # noqa: E402
 from signyales_hub.windowing import WindowBuffer, extract_features  # noqa: E402
 from signyales_hub.model_runtime import GestureClassifier  # noqa: E402
@@ -112,7 +113,9 @@ def main():
         source = SimulatedFrameSource(rate_hz=50)
     else:
         source = open_receiver(cfg)
-    source_iter = iter(source)
+    calibration = load_active()
+    print("Flex calibration: " + (calibration.describe() if calibration else "none (values used as they arrive)"))
+    source_iter = iter(apply_to_stream(source, calibration))
 
     trial_plan = []
     for label in args.gestures:

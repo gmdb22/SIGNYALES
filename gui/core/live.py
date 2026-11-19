@@ -2,7 +2,8 @@
 Signyales GUI — the live recognition pipeline, run on a background thread.
 
 Same steps, in the same order, as signyales_hub/main.py:
-  frame -> skip if both hands invalid (and reset the debouncer)
+  frame -> active flex calibration (calibration.py) applied
+        -> skip if both hands invalid (and reset the debouncer)
         -> extract_features -> WindowBuffer -> every stride: predict
         -> GestureDebouncer (with silent labels) -> stable gesture
 It reports what happens as events (plain dicts) instead of printing, so the
@@ -19,6 +20,7 @@ from .env import ensure_pi_side_on_path
 
 ensure_pi_side_on_path()
 
+from signyales_hub.calibration import CalibrationCapture  # noqa: E402
 from signyales_hub.config import HubConfig  # noqa: E402
 from signyales_hub.gesture_debounce import GestureDebouncer  # noqa: E402
 from signyales_hub.label_text import label_to_text  # noqa: E402
@@ -104,20 +106,26 @@ class LivePipeline:
     """
     on_event(dict) receives:
       {"type": "started", "model": bool, "labels": [...], "texts": [...], "link": "usb"/"uart"/"",
-       "port": str}
+       "port": str, "calibration": str (which calibration is applied, or "")}
       {"type": "status", "frames", "fps", "left_fresh_pct", "right_fresh_pct",
-       "left_flex", "right_flex", "left_valid", "right_valid",
+       "left_flex", "right_flex" (calibrated), "left_flex_raw", "right_flex_raw",
+       "left_valid", "right_valid",
        "left_received_pct", "left_lost", "right_received_pct", "right_lost",
        "receiver": the receiver's own [stats] dict (USB link) or None}
       {"type": "prediction", "label", "confidence"}        every inference
       {"type": "gesture", "label", "text", "confidence"}   a confirmed sign; text is what
                                                            to show and speak (label_text.py)
+      {"type": "calibration", "state": "running", "signer", "seconds_left"}  while calibrating
+      {"type": "calibration", "state": "done", "signer", "result": FlexCalibration dict,
+       "frames": {"left": n, "right": n}}   the GUI saves it and sets .calibration
       {"type": "stopped", "reason"} / {"type": "error", "message"}
     Frame listeners (add_frame_listener) get (frame, features) for every
-    usable frame; the GUI recorder uses this.
+    usable frame, calibrated; the GUI recorder uses this.
+    .calibration (a FlexCalibration or None) can be swapped while running.
     """
 
-    def __init__(self, source_factory, classifier_factory=None, on_event=None, cfg=None):
+    def __init__(self, source_factory, classifier_factory=None, on_event=None, cfg=None,
+                 calibration=None):
         self.cfg = cfg or HubConfig()
         self._source_factory = source_factory
         self._classifier_factory = classifier_factory or (lambda: None)
@@ -126,6 +134,22 @@ class LivePipeline:
         self._stop = threading.Event()
         self._thread = None
         self._source = None
+        self.calibration = calibration
+        self._capture = None
+        self._capture_signer = ""
+
+    def start_calibration(self, signer, seconds=None):
+        """Starts an 8 s capture of raw flex readings (wireless, from the
+        running stream). Returns False if not running or already capturing."""
+        if not self.running or self.stopping or self._capture is not None:
+            return False
+        self._capture_signer = signer
+        self._capture = CalibrationCapture(seconds) if seconds else CalibrationCapture()
+        return True
+
+    @property
+    def calibrating(self):
+        return self._capture is not None
 
     def add_frame_listener(self, fn):
         self._listeners.append(fn)
@@ -189,7 +213,8 @@ class LivePipeline:
         self._emit({"type": "started", "model": has_model,
                     "labels": labels, "texts": [to_text(lb) for lb in labels],
                     "link": getattr(self._source, "link", "") or "",
-                    "port": getattr(self._source, "port", "") or ""})
+                    "port": getattr(self._source, "port", "") or "",
+                    "calibration": self.calibration.describe() if self.calibration else ""})
         debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold,
                                      silent_labels=cfg.silent_labels)
         window = WindowBuffer(cfg.window_size_samples, cfg.feature_count)
@@ -199,9 +224,20 @@ class LivePipeline:
         win = {"n": 0, "left": 0, "right": 0, "t0": time.monotonic()}
         reason = "stopped"
         try:
-            for frame in self._source:
+            for raw in self._source:
                 if self._stop.is_set():
                     break
+                capture = self._capture
+                if capture is not None:
+                    capture.on_raw_frame(raw)
+                    if capture.done:
+                        self._capture = None
+                        debouncer.reset()
+                        self._emit({"type": "calibration", "state": "done", "signer": self._capture_signer,
+                                    "result": capture.result(self._capture_signer).to_dict(),
+                                    "frames": dict(capture.frames)})
+                cal = self.calibration
+                frame = cal.apply(raw) if cal is not None else raw
                 frame_count += 1
                 win["n"] += 1
                 win["left"] += frame["left_valid"]
@@ -219,6 +255,8 @@ class LivePipeline:
                         "right_fresh_pct": round(100 * win["right"] / n),
                         "left_flex": list(frame["left"]["flex"]),
                         "right_flex": list(frame["right"]["flex"]),
+                        "left_flex_raw": list(raw["left"]["flex"]),
+                        "right_flex_raw": list(raw["right"]["flex"]),
                         "left_valid": frame["left_valid"], "right_valid": frame["right_valid"],
                         "left_received_pct": link_stats["left"].received_pct,
                         "left_lost": link_stats["left"].lost,
@@ -227,6 +265,10 @@ class LivePipeline:
                         "receiver": self._receiver_stats(now),
                     })
                     win = {"n": 0, "left": 0, "right": 0, "t0": now}
+                    if self._capture is not None:
+                        self._emit({"type": "calibration", "state": "running",
+                                    "signer": self._capture_signer,
+                                    "seconds_left": round(self._capture.remaining, 1)})
 
                 hands_ok = frame["left_valid"] or frame["right_valid"]
                 if cfg.require_at_least_one_hand_valid and not hands_ok:
@@ -241,7 +283,7 @@ class LivePipeline:
                         pass
                 window.push(features)
 
-                if not has_model or not window.is_full():
+                if not has_model or not window.is_full() or self._capture is not None:
                     continue
                 if frame_count % cfg.stride_samples != 0:
                     continue

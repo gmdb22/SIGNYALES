@@ -242,6 +242,64 @@ with tempfile.TemporaryDirectory() as tmp:
     check("word text: collected for train.py, folders without text.txt left out",
           collect_word_texts(tmp, ["a", "rest"]) == {"a": "Letter A"})
 
+# ------------------------------------------------- flex calibration on the Pi (wireless)
+from signyales_hub import calibration as calib  # noqa: E402
+
+
+def _cal_frame(flex_r, flex_l=(0,) * 6, lv=False, rv=True):
+    g = lambda gid, fx: {"glove_id": gid, "seq": 1, "timestamp_ms": 0, "flex": tuple(fx),  # noqa: E731
+                         "accel": (0.0, 0.0, 1.0), "gyro": (0.0, 0.0, 0.0), "checksum": 0}
+    return {"frame_seq": 1, "frame_timestamp_ms": 0, "left_valid": lv, "right_valid": rv,
+            "left": g(0, flex_l), "right": g(1, flex_r), "checksum": 0}
+
+
+t = [0.0]
+cap = calib.CalibrationCapture(seconds=8.0, clock=lambda: t[0])
+for i in range(60):                       # 60 frames over 6 s: open hand ... fist
+    t[0] = i * 0.1
+    v = 1000 + (i % 30) * 100             # 1000 .. 3900
+    cap.on_raw_frame(_cal_frame((v, v, v, v, v, 2000)))
+check("calibration capture: not done before 8 s", not cap.done and cap.remaining > 1.9)
+t[0] = 8.5
+cap.on_raw_frame(_cal_frame((5,) * 6))    # after the 8 s: ignored
+check("calibration capture: done after 8 s, later frames ignored", cap.done and cap.frames["right"] == 60)
+cal = cap.result("W01")
+check("calibration: only the hand that sent frames is calibrated", list(cal.hands) == ["right"], cal.hands)
+check("calibration: min/max per sensor", cal.hands["right"]["min"][0] == 1000
+      and cal.hands["right"]["max"][0] == 3900 and cal.hands["right"]["max"][5] == 2000)
+rows = cal.report("right")
+check("calibration: report flags a sensor that did not move (palm)",
+      rows[0][4] is True and rows[5][4] is False and rows[5][3] == 0, rows)
+out = cal.apply(_cal_frame((1000, 3900, 2450, 500, 4095, 1234)))
+check("calibration: scales to 0-4095 and clamps; unmoved sensor passes through",
+      out["right"]["flex"] == (0, 4095, 2047, 0, 4095, 1234), out["right"]["flex"])
+src = _cal_frame((1000,) * 6)
+check("calibration: apply does not change the original frame, other hand untouched",
+      src["right"]["flex"] == (1000,) * 6 and out["left"] is not None
+      and cal.apply(src)["left"] is src["left"])
+check("calibration: none -> frames pass through",
+      list(calib.apply_to_stream([src], None))[0] is src)
+check("calibration: signer code rules", calib.check_signer("W01") == "" and calib.check_signer("W 01")
+      and calib.check_signer("") and calib.check_signer("../x"))
+with tempfile.TemporaryDirectory() as tmp:
+    check("calibration files: nothing active at first", calib.load_active(tmp) is None
+          and calib.list_signers(tmp) == [])
+    calib.save(cal, tmp)
+    left_only = calib.FlexCalibration("W01", {"left": {"min": [0] * 6, "max": [4000] * 6}})
+    calib.save(left_only.merged_with(calib.load_signer("W01", tmp)), tmp)
+    both = calib.load_active(tmp)
+    check("calibration files: saved, active, and a later left-only capture keeps the right hand",
+          both is not None and set(both.hands) == {"left", "right"}
+          and both.hands["right"]["max"][0] == 3900, both and both.hands)
+    calib.save(calib.FlexCalibration("W02", {"right": {"min": [9] * 6, "max": [999] * 6}}), tmp)
+    check("calibration files: list and switch the active signer",
+          calib.list_signers(tmp) == ["W01", "W02"] and calib.load_active(tmp).signer == "W02"
+          and calib.set_active("W01", tmp).signer == "W01" and calib.load_active(tmp).signer == "W01"
+          and calib.set_active("W09", tmp) is None)
+    (Path(tmp) / "active.json").write_text("{broken", encoding="utf-8")
+    check("calibration files: a broken active file means no calibration (not a crash)",
+          calib.load_active(tmp) is None)
+
 # ------------------------------------------------- performance_logger helper
 perf = load_tool("performance_logger")
 vals = list(range(1, 101))

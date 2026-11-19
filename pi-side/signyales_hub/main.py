@@ -23,6 +23,7 @@ import sys
 
 from .config import HubConfig
 from .serial_link import SimulatedFrameSource, open_receiver
+from .calibration import load_active
 from .windowing import WindowBuffer, extract_features
 from .model_runtime import GestureClassifier
 from .gesture_debounce import GestureDebouncer
@@ -48,6 +49,8 @@ def parse_args():
                          "When on, logging is redirected to signyales.log instead of the "
                          "terminal, so it doesn't fight with the fullscreen display for the "
                          "same screen space.")
+    p.add_argument("--no-calibration", action="store_true",
+                   help="Don't apply the active flex calibration (calibration.py)")
     p.add_argument("-v", "--verbose", action="store_true", help="Debug-level logging")
     return p.parse_args()
 
@@ -115,10 +118,18 @@ def main():
             cfg.model_dir,
         )
 
+    calibration = None if args.no_calibration else load_active()
+    if calibration:
+        log.info("Flex calibration applied: %s", calibration.describe())
+    else:
+        log.info("No flex calibration applied (none saved, or --no-calibration): flex values used as they arrive")
+
     frame_count = 0
     try:
         for frame in source:
             frame_count += 1
+            if calibration:
+                frame = calibration.apply(frame)
 
             hands_ok = frame["left_valid"] or frame["right_valid"]
             if cfg.require_at_least_one_hand_valid and not hands_ok:

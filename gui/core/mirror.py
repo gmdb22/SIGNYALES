@@ -3,8 +3,12 @@ Signyales GUI — mirror link: the Pi shares recognized words with a laptop.
 
 The Pi (server) sends one JSON object per line over TCP to every connected
 laptop (client). The laptop shows the subtitle and plays the sound. Only
-events are sent (recognized words and a twice-a-second status), never raw
-sensor data or recordings.
+events are sent (recognized words, a twice-a-second status, calibration
+progress and results), never recordings.
+
+Since 19 Nov 2026 a laptop can also send one kind of line back: a command
+{"type": "command", "cmd": ...} for wireless calibration (core/calibrate.py).
+The Pi ignores anything else a laptop sends.
 
 Meant for a cable or a private network between your own two machines: there
 is no password, so don't turn sharing on while connected to a public network.
@@ -17,7 +21,8 @@ import socket
 import threading
 
 DEFAULT_PORT = 50555
-SHARED_TYPES = ("started", "status", "gesture", "stopped", "error")
+SHARED_TYPES = ("started", "status", "gesture", "stopped", "error", "calibration")
+MAX_COMMAND_BYTES = 1024
 
 
 def local_ip_addresses():
@@ -40,9 +45,10 @@ def local_ip_addresses():
 
 
 class MirrorServer:
-    def __init__(self, host="0.0.0.0", port=DEFAULT_PORT, on_clients_changed=None):
+    def __init__(self, host="0.0.0.0", port=DEFAULT_PORT, on_clients_changed=None, on_command=None):
         self.host, self.port = host, port
         self._on_clients_changed = on_clients_changed or (lambda n: None)
+        self._on_command = on_command          # called on a network thread with the command dict
         self._clients = []
         self._lock = threading.Lock()
         self._sock = None
@@ -79,6 +85,27 @@ class MirrorServer:
                         continue
                 self._clients.append(conn)
             self._on_clients_changed(self.client_count)
+            if self._on_command is not None:
+                threading.Thread(target=self._command_loop, args=(conn,), daemon=True).start()
+
+    def _command_loop(self, conn):
+        """Reads command lines a laptop sends. Ends when the laptop disconnects."""
+        try:
+            with conn.makefile("r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    if len(line) > MAX_COMMAND_BYTES:
+                        continue
+                    try:
+                        cmd = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(cmd, dict) and cmd.get("type") == "command":
+                        try:
+                            self._on_command(cmd)
+                        except Exception:
+                            pass
+        except (OSError, ValueError):
+            pass
 
     def publish(self, event: dict):
         if event.get("type") not in SHARED_TYPES:
@@ -127,6 +154,12 @@ class MirrorClient:
         self._sock = socket.create_connection((host, port), timeout=timeout)
         self._sock.settimeout(None)
         threading.Thread(target=self._read_loop, daemon=True).start()
+
+    def send(self, command: dict):
+        """Sends one command line to the Pi (e.g. calibrate). Raises OSError if not connected."""
+        if self._sock is None:
+            raise OSError("not connected")
+        self._sock.sendall((json.dumps(command) + "\n").encode())
 
     def _read_loop(self):
         reason = "closed by the Pi"

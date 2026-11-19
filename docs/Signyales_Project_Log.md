@@ -298,3 +298,23 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   synthetic data with typed words (wrote `display_names.json`; the hub loader showed A, Ñ,
   I'm fine, rest, Sorry, I don't understand), `collect_gesture.py --simulate --label "I'm
   fine"`, and the Record tab on a virtual screen (simulated glove). Not yet run on the Pi.
+- **Wireless flex calibration (owner's request: USB only for flashing).** Glove firmware
+  `SEND_RAW_FLEX 1` sends raw flex values (one reflash needed; `c` over Serial now only prints
+  ranges). New `pi-side/signyales_hub/calibration.py`: 8 s capture from the live stream, per-sensor
+  min/max, one file per signer code plus `active.json` in `~/signyales_data/calibration`, applied
+  to every frame before features in the GUI pipeline (Recognize, Record, kiosk), `main.py`,
+  `collect_gesture.py`, `accuracy_logger.py` and `performance_logger.py`. GUI: new **Calibrate
+  glove** tab on the Pi; the laptop's Mirror tab sends calibrate / use-saved / list commands to
+  the Pi over the mirror link (first laptop-to-Pi messages; only these commands are accepted),
+  also when the Pi runs the kiosk with `--share`. Record tab shows the active calibration, warns
+  on a different signer, and keeps `calibration.json` per session (warns if it changes
+  mid-session). Without a saved calibration, frames pass through unchanged (older firmware).
+  Models trained before this (demo1) were trained on glove-calibrated values: retrain after
+  calibrating on the Pi.
+- Verified in the sandbox only: unit and GUI-core tests (capture, scaling, files, pipeline,
+  laptop->Pi commands over localhost), and a two-process run on virtual screens with fake glove
+  data: laptop GUI pressed Calibrate, Pi GUI (Recognize + sharing) captured, saved and applied it,
+  both showed the results; the Pi's own button (connecting on demand), switching to a saved
+  calibration, the Record-tab signer warning, and the kiosk (`--kiosk --simulate --share`)
+  taking a laptop's command. Glove firmware change NOT compiled here (PlatformIO registry
+  blocked) and nothing run on real hardware.

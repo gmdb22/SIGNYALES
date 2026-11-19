@@ -110,12 +110,20 @@ command was added after that and has not been run on hardware yet.
 
 ## Calibration
 
-Flex sensors vary from unit to unit, so raw ADC values alone aren't
-comparable across fingers or across gloves. Send `c` over Serial at any
-time to run an 8-second calibration: flex and relax every finger and the
-palm fully during that window. The captured min/max per sensor is saved to flash
-(NVS) and survives reboots — you only need to redo it if the sensors are
-replaced or a different wearer's flex range differs substantially.
+**Since 19 Nov 2026 the flex calibration is done on the Pi, wirelessly**
+(`SEND_RAW_FLEX 1` in `glove_firmware.ino`): the glove sends raw readings, and
+the GUI's **Calibrate glove** tab on the Pi (or **Mirror the Pi > Calibrate** on
+the laptop) captures 8 s of fist/open-hand over the radio and saves one
+calibration per signer code on the Pi (`pi-side/signyales_hub/calibration.py`).
+No USB cable is needed for it; USB is only for flashing. With raw flex, `c` over
+Serial only prints each sensor's min/max (a wiring check) and changes nothing
+that is sent.
+
+Older behaviour (`SEND_RAW_FLEX 0`): flex sensors vary from unit to unit, so
+raw ADC values alone aren't comparable across fingers or across gloves. Send `c`
+over Serial at any time to run an 8-second calibration: flex and relax every
+finger and the palm fully during that window. The captured min/max per sensor is
+saved to flash (NVS) and survives reboots.
 
 ### Gyro resting offset (automatic at start-up)
 

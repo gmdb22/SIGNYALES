@@ -184,8 +184,8 @@ sequence. Stage numbers match that guide and the log form.
    pio run -e left_glove -t upload      # right glove: -e right_glove
    pio device monitor
    ```
-   In the monitor, type `c` and flex all fingers and the palm for 8 seconds to
-   calibrate (6 sensors per glove). Before that, after the glove rework, run the
+   Flex calibration is then done wirelessly on the Pi, per signer (GUI: Active >
+   Calibrate glove, or the laptop's Mirror tab), not over USB. After the glove rework, run the
    hardware check once (`firmware/tools/glove_hw_check`, see `firmware/glove/README.md`).
 3. **Flash the receiver (Stage 4).**
    ```

@@ -21,7 +21,7 @@ sys.path.insert(0, str(GUI))
 
 import numpy as np  # noqa: E402
 
-from core import env, hardware, mirror, recorder, tasks  # noqa: E402
+from core import calibrate, env, hardware, mirror, recorder, tasks  # noqa: E402
 from core.live import LinkStats, LivePipeline, event_text, link_stats_text  # noqa: E402
 from core.procs import ProcessRunner  # noqa: E402
 
@@ -271,6 +271,80 @@ with tempfile.TemporaryDirectory() as tmp:
     ok, msg, words = recorder.describe_data_folder(sess)
     check("data folder: '_' folders are not counted (like training)", "_stage7b" not in words)
 
+# ---------------------------------------------------------------- wireless calibration
+from signyales_hub.calibration import FlexCalibration  # noqa: E402
+cal = FlexCalibration("W01", {"right": {"min": [1000] * 6, "max": [3000] * 6}})
+ev = []
+seen = []
+p = LivePipeline(lambda: iter([frame(i, flex=2000) for i in range(1, 40)]), lambda: None, ev.append,
+                 calibration=cal)
+p.add_frame_listener(lambda fr, feats: seen.append((fr["right"]["flex"][0], fr["left"]["flex"][0], feats[6])))
+p.start()
+p.join(10)
+check("calibration: pipeline applies it to listeners/features (right 2000 -> 2047), left untouched",
+      seen and seen[0][0] == 2047 and seen[0][1] == 2000 and abs(seen[0][2] - 2047 / 4095) < 1e-6, seen[:1])
+check("calibration: started event says which calibration is applied",
+      ev[0]["type"] == "started" and ev[0]["calibration"].startswith("W01"), ev[0])
+
+
+class SlowFrames:
+    """Frames at ~200 Hz until stopped, flex rising then falling (fist/open)."""
+    def __init__(self):
+        self.stop = False
+
+    def __iter__(self):
+        i = 0
+        while not self.stop and i < 4000:
+            i += 1
+            time.sleep(0.005)
+            yield frame(i, left_valid=False, flex=500 + (i * 37) % 3000)
+
+
+src = SlowFrames()
+ev = []
+p = LivePipeline(lambda: src, lambda: None, ev.append)
+check("calibration: cannot start before the pipeline runs", p.start_calibration("W01") is False)
+p.start()
+wait_for(lambda: ev)
+check("calibration: starts on a running pipeline", p.start_calibration("W01", seconds=1.0)
+      and p.calibrating and p.start_calibration("W01") is False)
+wait_for(lambda: any(e["type"] == "calibration" and e["state"] == "done" for e in ev), 5)
+src.stop = True
+p.join(5)
+done = [e for e in ev if e["type"] == "calibration" and e["state"] == "done"]
+check("calibration: done event with the right hand only (left glove silent)",
+      done and list(done[0]["result"]["hands"]) == ["right"] and done[0]["frames"]["left"] == 0
+      and not p.calibrating, done[:1])
+with tempfile.TemporaryDirectory() as tmp:
+    res = calibrate.finish(p, done[0], tmp)
+    check("calibration: finish saves it, applies it to the pipeline, all sensors moved",
+          res["state"] == "saved" and res["all_ok"] and p.calibration is not None
+          and p.calibration.signer == "W01" and (Path(tmp) / "W01.json").exists()
+          and (Path(tmp) / "active.json").exists(), res)
+    check("calibration: results table lines", any("index" in ln and "OK" in ln
+                                                  for ln in calibrate.describe_rows(res["rows"])))
+    empty = {"type": "calibration", "state": "done", "signer": "W02",
+             "result": {"signer": "W02", "hands": {}}, "frames": {"left": 0, "right": 0}}
+    check("calibration: no glove data -> failed, nothing saved",
+          calibrate.finish(p, empty, tmp)["state"] == "failed" and not (Path(tmp) / "W02.json").exists())
+    check("calibration: laptop commands (use saved, list, unknown signer, bad code, not running)",
+          calibrate.handle_command(p, {"type": "command", "cmd": "use_calibration", "signer": "W01"},
+                                   tmp)["state"] == "active"
+          and calibrate.handle_command(p, {"type": "command", "cmd": "calibration_list"}, tmp)["signers"]
+          == ["W01"]
+          and calibrate.handle_command(p, {"type": "command", "cmd": "use_calibration", "signer": "W05"},
+                                       tmp)["state"] == "error"
+          and calibrate.handle_command(p, {"type": "command", "cmd": "calibrate", "signer": "a b"},
+                                       tmp)["state"] == "error"
+          and calibrate.handle_command(p, {"type": "command", "cmd": "calibrate", "signer": "W01"},
+                                       tmp)["state"] == "error"
+          and calibrate.handle_command(p, {"type": "gesture"}, tmp) is None)
+    sess = Path(tmp) / "W01_S02"
+    check("calibration: session keeps the first calibration, warns when it changes",
+          calibrate.note_session(sess, p.calibration) == "" and (sess / "calibration.json").exists()
+          and calibrate.note_session(sess, p.calibration) == ""
+          and "Mixing calibrations" in calibrate.note_session(sess, cal))
+
 # ---------------------------------------------------------------- mirror
 received, disconnected = [], []
 server = mirror.MirrorServer(host="127.0.0.1", port=0)
@@ -291,6 +365,23 @@ client2.connect("127.0.0.1", server.port)
 wait_for(lambda: late)
 check("mirror: a laptop that connects later still gets the word list",
       late and late[0]["type"] == "started" and late[0]["labels"] == ["oo", "salamat"], late)
+commands = []
+server2 = mirror.MirrorServer(host="127.0.0.1", port=0, on_command=commands.append)
+server2.start()
+got = []
+client3 = mirror.MirrorClient(got.append)
+client3.connect("127.0.0.1", server2.port)
+wait_for(lambda: server2.client_count == 1)
+client3.send({"type": "command", "cmd": "calibrate", "signer": "W01"})
+client3._sock.sendall(b"not json\n{\"type\": \"gesture\"}\n")
+wait_for(lambda: commands)
+check("mirror: laptop -> Pi calibration command arrives; other lines ignored",
+      commands == [{"type": "command", "cmd": "calibrate", "signer": "W01"}], commands)
+server2.publish({"type": "calibration", "state": "running", "signer": "W01", "seconds_left": 5.0})
+wait_for(lambda: got)
+check("mirror: calibration progress reaches the laptop", got and got[0]["type"] == "calibration", got)
+client3.close()
+server2.stop()
 client2.close()
 server.stop()
 check("mirror: laptop is told when the Pi stops sharing", wait_for(lambda: disconnected, 3))

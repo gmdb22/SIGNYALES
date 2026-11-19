@@ -25,7 +25,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import font as tkfont
 
-from core import mirror
+from core import calibrate, mirror
 from core.display import friendly_error
 from core.env import PI_SIDE, receiver_link
 from core.live import LivePipeline, event_text, link_stats_text, load_classifier, make_source
@@ -129,7 +129,8 @@ class KioskView(tk.Frame):
         classifier = (lambda: load_classifier(self.model_dir)) if self._model_files else None
         link = self.link
         self.pipeline = LivePipeline(lambda: make_source(port=self.port, simulate=self.simulate, link=link),
-                                     classifier, lambda e: self.app.call(self._on_event, e))
+                                     classifier, lambda e: self.app.call(self._on_event, e),
+                                     calibration=calibrate.cal_files.load_active())
         self._started_at = time.monotonic()
         self.pipeline.start()
         self._refresh()
@@ -141,9 +142,14 @@ class KioskView(tk.Frame):
     def _on_event(self, e):
         if self._closing:
             return
+        if e["type"] == "calibration" and e.get("state") == "done":
+            e = calibrate.finish(self.pipeline, e)
         if self.server:
             self.server.publish(e)
         t = e["type"]
+        if t == "calibration":
+            self._show_calibration(e)
+            return
         if t == "started":
             self._has_model = bool(e["model"])
             self._open_port = e.get("port") or None
@@ -249,10 +255,33 @@ class KioskView(tk.Frame):
         if self.message.cget("text") != text:
             self.message.configure(text=text, fg=colour)
 
+    # ------------------------------------------------------------ calibration (from a laptop)
+    def _mirror_command(self, cmd):
+        if self._closing:
+            return
+        ev = calibrate.handle_command(self.pipeline, cmd)
+        if ev is not None:
+            self._on_event(ev)
+
+    def _show_calibration(self, e):
+        """Big-screen feedback while a laptop calibrates the glove through the kiosk."""
+        state, who = e.get("state"), e.get("signer", "")
+        if state == "started":
+            self.subtitle.show(f"Calibrating {who}: fist, open, repeat")
+        elif state == "running":
+            self.subtitle.show(f"Calibrating {who}: {e['seconds_left']:.0f} s")
+        elif state == "saved":
+            self.subtitle.show(f"Calibrated {who}" + ("" if e.get("all_ok") else " (check sensors)"))
+        elif state == "active":
+            self.subtitle.show(f"Using {who}'s calibration")
+        elif state in ("failed", "error"):
+            self.subtitle.show("Calibration failed")
+
     # ------------------------------------------------------------ sharing
     def _start_share(self):
         try:
-            self.server = mirror.MirrorServer()
+            self.server = mirror.MirrorServer(
+                on_command=lambda cmd: self.app.call(self._mirror_command, cmd))
             self.server.start()
         except OSError as exc:
             self.server = None

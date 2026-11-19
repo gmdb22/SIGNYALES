@@ -4,7 +4,7 @@ One app for the laptop and the Raspberry Pi, with two modes:
 
 | | **Testing** (every check is a button) | **Active** (plug and play) |
 |---|---|---|
-| **Laptop** | Software checks, native firmware tests, training smoke test, firmware compile, subtitle and speaker check, simulated pipeline, inspect recordings, train a model, benchmark | **Mirror the Pi**: the Pi recognizes, the laptop shows the subtitles and plays the sound. **Hardware helper**: compile and upload firmware, serial monitor (with "send c" for calibration), RECEIVER_MAC check |
+| **Laptop** | Software checks, native firmware tests, training smoke test, firmware compile, subtitle and speaker check, simulated pipeline, inspect recordings, train a model, benchmark | **Mirror the Pi**: the Pi recognizes, the laptop shows the subtitles and plays the sound. **Hardware helper**: compile and upload firmware, serial monitor (with "send c": a wiring check now; calibration is wireless, see below), RECEIVER_MAC check |
 | **Raspberry Pi** | Software checks, UART loopback, 30 s live data check, freeze manifest, subtitle and speaker check, simulated pipeline, inspect, benchmark | **Recognize**: live subtitles and speech, optional sharing to a laptop. **Record (teach the model)**: one big Start/Stop button per repetition |
 
 The app detects whether it runs on a Raspberry Pi. The **This machine** menu
@@ -88,10 +88,33 @@ To start it automatically when the Pi turns on, see
 To check the link without a model or gloves, press **Send test word** on the Pi: the
 laptop shows and speaks "salamat" exactly as for a recognized sign.
 
-Only recognized words and a twice-a-second glove status are sent (TCP port
-50555), never sensor recordings. There is no password, so only share on a
+Only recognized words, a twice-a-second glove status and calibration progress
+are sent (TCP port 50555), never sensor recordings; the laptop can send back
+only calibration commands. There is no password, so only share on a
 cable or a network you control. Untick **Speak words on this Pi** if the
 laptop should be the only speaker.
+
+## Calibrating the glove (wireless, per signer)
+
+The glove sends its flex readings uncalibrated (glove firmware from 19 Nov 2026,
+`SEND_RAW_FLEX 1`); the Pi calibrates them over the radio. No USB cable.
+
+- **On the Pi:** Active → **Calibrate glove**. Type the signer code (the same box
+  as the Record tab), press **Calibrate (8 s)**, then make a tight fist and open
+  the hand fully, again and again, for 8 seconds. It connects to the gloves by
+  itself if nothing is connected yet. Each sensor's range is listed; a range
+  under 500 is marked TOO SMALL (check that sensor or its wire).
+- **From the laptop:** while connected in **Mirror the Pi** (Pi recognizing with
+  sharing on, or the kiosk with `--share`), type the signer code and press
+  **Calibrate (8 s)**. The Pi does the work; the laptop shows the countdown and
+  the results. **Use saved** switches to a signer's earlier calibration.
+
+One calibration is saved per signer (`~/signyales_data/calibration/W01.json` on the
+Pi) and one is active (`active.json`). Recognize, Record, the kiosk and the
+command-line tools all apply the active one, and each recording session keeps a
+copy (`calibration.json`); the Record tab warns if the active calibration is for
+a different signer, or changes in the middle of a session. Calibrate **before**
+recording, and recognise with the same signer's calibration active.
 
 ## Recording ("teach the model")
 

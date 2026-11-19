@@ -19,8 +19,9 @@ GLOVES (3_Gloves)
 [ ] RECEIVER_MAC set in config.h (not committed)
 [ ] Left:  hardware check run, output copied (r/s, w/r/s)
 [ ] Right: hardware check run, output copied (r/s, w/r/s)
-[ ] Left glove firmware flashed: "This unit: LEFT", calibrated (c)
-[ ] Right glove firmware flashed: "This unit: RIGHT", calibrated (c)
+[ ] Left glove firmware flashed: "This unit: LEFT", "Flex values are sent RAW"
+[ ] Right glove firmware flashed: "This unit: RIGHT", "Flex values are sent RAW"
+[ ] Each signer calibrated on the Pi (GUI: Calibrate glove), all sensors OK
 [ ] Receiver [stats] shows a high ratio for both gloves
 
 RASPBERRY PI (4_Raspberry_Pi)

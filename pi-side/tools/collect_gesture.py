@@ -47,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import numpy as np  # noqa: E402
 
+from signyales_hub.calibration import apply_to_stream, load_active  # noqa: E402
 from signyales_hub.config import HubConfig  # noqa: E402
 from signyales_hub.label_text import save_word_text, word_to_label  # noqa: E402
 from signyales_hub.serial_link import SimulatedFrameSource, open_receiver  # noqa: E402
@@ -187,7 +188,10 @@ def main():
 
     n = cfg.window_size_samples
     print(f"Recording gesture {shown!r} (folder {args.label}): {args.reps} repetitions -> {label_dir}")
-    source_iter = iter(source)
+    calibration = load_active()
+    print("Flex calibration: " + (calibration.describe() if calibration else
+                                  "none saved, values used as they arrive (calibrate in the GUI first)"))
+    source_iter = iter(apply_to_stream(source, calibration))
     background = None if args.variable else BackgroundFrames(source_iter)
     if background:
         print(f"Each repetition is {n / 50:.1f} s. Hand at rest, press Enter, sign once, "
