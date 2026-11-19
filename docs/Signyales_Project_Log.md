@@ -269,3 +269,18 @@ still out of the PCBs, one MPU each on jumpers, no flex sensors. Details and num
   uses whichever answers (the same check runs again on every IMU restart). Not compiled in the
   sandbox (PlatformIO download blocked); compile and upload on the laptop.
 
+## 2026-11-19
+
+- Subtitles and speech now show phrase labels as words: `sorry-i-dont-understand` is shown and
+  spoken as "sorry, I don't understand", `im-fine` as "I'm fine", `hard-of-hearing` as "hard of
+  hearing". New `pi-side/signyales_hub/label_text.py`; an optional `display_names.json` in the
+  model folder overrides the text per label. Used by the hub (`main.py`) and the GUI (Recognize,
+  Mirror, kiosk, Testing simulation). Gesture events now carry `text` next to `label`; a laptop
+  mirroring an older Pi makes the text itself. Labels in `labels.json`, logs and the accuracy
+  logger are unchanged. A subtitle may now use two lines when that makes the text bigger.
+- `setup_pi.sh` installs scikit-learn (needed to train on the Pi; it was installed by hand on
+  14 Nov).
+- Verified in an AI assistant's Linux sandbox only: Pi-side unit tests, frame round-trip, GUI
+  core tests (new label-text checks), and the subtitle panel on a virtual screen (900x260:
+  "sorry, I don't understand" goes on two lines at 83 px; single words unchanged at 167 px).
+  `setup_pi.sh` was only syntax-checked. Not yet run on the Pi or heard through espeak-ng.

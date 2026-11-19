@@ -141,13 +141,14 @@ def main():
 
             stable_label = debouncer.update(label, confidence)
             if stable_label:
+                text = classifier.display_text(stable_label)
                 if subtitle:
-                    subtitle.show(stable_label)
+                    subtitle.show(text)
                 else:
-                    print(f"[gesture] {stable_label}")
+                    print(f"[gesture] {text}")
                 log.info("Recognized gesture: %s", stable_label)
                 if tts:
-                    tts.speak(stable_label)
+                    tts.speak(text)
 
     except KeyboardInterrupt:
         log.info("Shutting down.")

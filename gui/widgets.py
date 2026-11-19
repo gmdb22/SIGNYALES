@@ -62,6 +62,17 @@ class LogBox(ttk.Frame):
         self.text.configure(state="disabled")
 
 
+def split_two_lines(text):
+    """Splits a phrase at the space nearest its middle: [first, second], or
+    None for a single word."""
+    spaces = [i for i, c in enumerate(text) if c == " "]
+    if not spaces:
+        return None
+    mid = len(text) / 2
+    i = min(spaces, key=lambda j: abs(j - mid))
+    return [text[:i], text[i + 1:]]
+
+
 class SubtitlePanel(tk.Frame):
     """Large, centered word on a dark background, sized to fit the panel."""
 
@@ -77,17 +88,31 @@ class SubtitlePanel(tk.Frame):
         self.bind("<Configure>", lambda e: self._fit())
         self._mirrors = []
 
+    def _largest(self, lines, w, h):
+        """Biggest pixel size (from the top, in steps of 5) at which every
+        line fits the panel's width and all lines fit its height."""
+        px = min(int(self.max_size * 4 / 3), int(h * 0.73 / len(lines)))
+        self._font.configure(size=-px)
+        while px > 12 and max(self._font.measure(t) for t in lines) > w * 0.9:
+            px -= 5
+            self._font.configure(size=-px)
+        return px
+
     def _fit(self):
         # Sizes in pixels (negative font size), so the word fits the panel
         # whatever Tk's point scaling is (the GUI scales text to the screen).
+        # A phrase may go on two lines when that makes the text bigger.
         w, h = max(self.winfo_width(), 50), max(self.winfo_height(), 50)
-        px = min(int(self.max_size * 4 / 3), int(h * 0.73))
+        shown = self._text
+        px = self._largest([shown], w, h)
+        two = split_two_lines(self._text)
+        if two:
+            px2 = self._largest(two, w, h)
+            if px2 > px:
+                shown, px = "\n".join(two), px2
         self._font.configure(size=-px)
-        while px > 12 and self._font.measure(self._text) > w * 0.9:
-            px -= 5
-            self._font.configure(size=-px)
         dim = self._text == self.idle_text
-        self.label.configure(text=self._text, fg="#8a96a3" if dim else PANEL_FG)
+        self.label.configure(text=shown, fg="#8a96a3" if dim else PANEL_FG)
 
     def show(self, text):
         self._text = text

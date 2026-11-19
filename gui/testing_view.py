@@ -15,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from core import recorder, tasks
 from core.env import PI_SIDE, REPO_ROOT
-from core.live import LivePipeline, load_classifier, make_source
+from core.live import LivePipeline, event_text, load_classifier, make_source
 from core.procs import ProcessRunner
 from widgets import STATUS_STYLE, HandStatus, LogBox, SubtitlePanel
 
@@ -223,12 +223,13 @@ class TestingView(ttk.Frame):
         if t == "status":
             self.hands.update_status(e)
         elif t == "started":
-            self.log.append("Model loaded: " + (", ".join(e["labels"]) if e["model"] else
+            self.log.append("Model loaded: " + (", ".join(e.get("texts") or e["labels"]) if e["model"] else
                                                 "no model (status only, no words)"))
         elif t == "gesture":
-            self.subtitle.show(e["label"])
-            self.app.speaker.say(e["label"])
-            self.log.append(f"Recognized: {e['label']} ({e['confidence']:.2f})")
+            text = event_text(e)
+            self.subtitle.show(text)
+            self.app.speaker.say(text)
+            self.log.append(f"Recognized: {text} ({e['confidence']:.2f})")
         elif t == "error":
             self.log.append("ERROR: " + e["message"], "fail")
         elif t == "stopped":

@@ -6,7 +6,8 @@
 #     and swig + liblgpio-dev (needed to build the lgpio package)
 #   - downloads the code to ~/SIGNYALES (branch code-tasks)
 #   - makes the Python environment pi-side/venv and installs the packages
-#     (falls back to a smaller package list if TensorFlow won't install)
+#     (falls back to a smaller package list if TensorFlow won't install),
+#     plus scikit-learn for training on the Pi (added 19 Nov 2026)
 #   - turns on the GPIO serial port (adds dtparam=uart0=on to config.txt)
 #   - prints the versions to report
 #
@@ -21,9 +22,9 @@
 # STATUS: the 25 Oct version was run on the project's Pi 5 on 26-27 Oct 2026
 # and finished on the third run. Run 2 failed building lgpio ("command 'swig'
 # failed"); installing swig and liblgpio-dev by hand fixed it. This version
-# installs them itself (29 Oct). This updated version has not been run on a
-# fresh Pi yet. If a step fails, the script stops and tells you which one;
-# send ~/signyales_setup_log.txt to Claude.
+# installs them itself (29 Oct). The 29 Oct and 19 Nov (scikit-learn)
+# changes have not been run on a fresh Pi yet. If a step fails, the script
+# stops and tells you which one; send ~/signyales_setup_log.txt to Claude.
 
 set -euo pipefail
 
@@ -80,6 +81,10 @@ fi
 venv/bin/python -m pip install --upgrade pip
 if venv/bin/python -m pip install -r requirements.txt; then
   echo "Full package install OK."
+  # Training on the Pi (training/src/train.py) also needs scikit-learn.
+  # Found missing on 14 Nov 2026, when the first model was trained on the Pi.
+  venv/bin/python -m pip install "scikit-learn>=1.3" \
+    || echo "scikit-learn did not install: recognition still works, training on the Pi will not."
 else
   echo
   echo "Full install failed (usually TensorFlow). Installing the smaller list instead."
@@ -105,6 +110,8 @@ espeak-ng --version | head -n 1
 venv/bin/python -c "import serial, numpy; print('pyserial', serial.__version__, '| numpy', numpy.__version__)"
 venv/bin/python -c "import tensorflow as tf; print('tensorflow', tf.__version__)" 2>/dev/null \
   || echo "tensorflow: not installed (fine until a trained model exists)"
+venv/bin/python -c "import sklearn; print('scikit-learn', sklearn.__version__)" 2>/dev/null \
+  || echo "scikit-learn: not installed (only needed to train on the Pi)"
 
 trap - ERR
 echo

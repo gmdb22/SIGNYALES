@@ -199,6 +199,29 @@ with tempfile.TemporaryDirectory() as tmp:
     check("model: no interpreter library is imported when there is no model",
           not any(m in sys.modules for m in ("tensorflow", "tflite_runtime", "ai_edge_litert")))
 
+# ------------------------------------------------- label text (subtitles/speech)
+from signyales_hub.label_text import label_to_text, load_display_names  # noqa: E402
+check("label text: one word is unchanged", label_to_text("kumusta") == "kumusta")
+check("label text: - and _ become spaces",
+      label_to_text("hard-of-hearing") == "hard of hearing" and label_to_text("hard_of_hearing")
+      == "hard of hearing")
+check("label text: demo phrase gets its comma and apostrophe",
+      label_to_text("sorry-i-dont-understand") == "sorry, I don't understand"
+      and label_to_text("sorry_i_dont_understand") == "sorry, I don't understand")
+check("label text: im-fine -> I'm fine", label_to_text("im-fine") == "I'm fine", label_to_text("im-fine"))
+check("label text: None -> empty, odd label kept", label_to_text(None) == "" and label_to_text("--") == "--")
+with tempfile.TemporaryDirectory() as tmp:
+    check("display names: no file -> {}", load_display_names(tmp) == {})
+    (Path(tmp) / "display_names.json").write_text(
+        json.dumps({"Kumusta": "Kumusta!", "yes": 5}), encoding="utf-8")
+    names = load_display_names(tmp)
+    check("display names: file wins over the rules, bad entries skipped",
+          label_to_text("kumusta", names) == "Kumusta!" and label_to_text("yes", names) == "yes", names)
+    (Path(tmp) / "display_names.json").write_text("{not json", encoding="utf-8")
+    check("display names: broken file is ignored", load_display_names(tmp) == {})
+    clf = GestureClassifier(tmp)
+    check("model: display_text works without a model", clf.display_text("im-fine") == "I'm fine")
+
 # ------------------------------------------------- performance_logger helper
 perf = load_tool("performance_logger")
 vals = list(range(1, 101))

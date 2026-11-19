@@ -22,7 +22,7 @@ sys.path.insert(0, str(GUI))
 import numpy as np  # noqa: E402
 
 from core import env, hardware, mirror, recorder, tasks  # noqa: E402
-from core.live import LinkStats, LivePipeline, link_stats_text  # noqa: E402
+from core.live import LinkStats, LivePipeline, event_text, link_stats_text  # noqa: E402
 from core.procs import ProcessRunner  # noqa: E402
 
 failures = []
@@ -113,6 +113,16 @@ gestures = [e["label"] for e in ev if e["type"] == "gesture"]
 check("live: same debounce result as main.py (oo, rest re-arms, oo again; 2x salamat too few)",
       gestures == ["oo", "oo"], gestures)
 check("live: started and stopped events", ev[0]["type"] == "started" and ev[-1]["type"] == "stopped")
+check("live: gesture events carry the text to show and speak",
+      all(e.get("text") == e["label"] for e in ev if e["type"] == "gesture")
+      and ev[0].get("texts") == ev[0]["labels"], ev[0])
+ev2 = run_pipeline([frame(i) for i in range(1, W + 5 * 4)], FakeClassifier(["im-fine"] * 4))
+g2 = [e for e in ev2 if e["type"] == "gesture"]
+check("live: a phrase label is turned into words (im-fine -> I'm fine)",
+      g2 and g2[0]["label"] == "im-fine" and g2[0]["text"] == "I'm fine", g2)
+check("event_text: uses text, else makes it from the label (older Pi on the mirror)",
+      event_text({"label": "x", "text": "y"}) == "y"
+      and event_text({"label": "sorry-i-dont-understand"}) == "sorry, I don't understand")
 preds = [e for e in ev if e["type"] == "prediction"]
 check("live: one prediction per stride once the window is full", len(preds) == 12, len(preds))
 

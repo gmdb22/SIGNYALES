@@ -15,7 +15,7 @@ from tkinter import filedialog, messagebox, ttk
 from core import hardware, mirror, recorder, tasks
 from core.env import (IS_WINDOWS, PI_SIDE, find_tool, is_raspberry_pi, receiver_link,
                       save_receiver_link, uart_port)
-from core.live import LivePipeline, load_classifier, make_source
+from core.live import LivePipeline, event_text, load_classifier, make_source
 from core.procs import ProcessRunner
 from widgets import MUTED, OK, BAD, FullscreenSubtitles, HandStatus, LogBox, SubtitlePanel
 
@@ -181,7 +181,8 @@ class PiActiveView(ttk.Frame):
             if e.get("port"):
                 self.r_log.append(f"Reading the receiver on {e['port']} ({e.get('link', '')} link).", "muted")
             if e["model"]:
-                self.r_state.configure(text="Running. Words: " + ", ".join(e["labels"]), foreground=OK)
+                words = ", ".join(e.get("texts") or e["labels"])
+                self.r_state.configure(text="Running. Words: " + words, foreground=OK)
                 self.r_subtitle.idle()
             else:
                 self.r_state.configure(text="Model did not load: see the log.", foreground=BAD)
@@ -190,10 +191,11 @@ class PiActiveView(ttk.Frame):
         elif t == "status":
             self.r_hands.update_status(e)
         elif t == "gesture":
-            self.r_subtitle.show(e["label"])
-            self.r_recent.add(e["label"], e["confidence"])
+            text = event_text(e)
+            self.r_subtitle.show(text)
+            self.r_recent.add(text, e["confidence"])
             if self.r_speak.get():
-                self.app.speaker.say(e["label"])
+                self.app.speaker.say(text)
         elif t == "error":
             self.r_log.append("ERROR: " + e["message"], "fail")
             m = e["message"].lower()
@@ -215,7 +217,7 @@ class PiActiveView(ttk.Frame):
         here, and the same event to any connected laptop. For checking the
         display, speaker and mirror link before a demo; needs no model or gloves.
         """
-        event = {"type": "gesture", "label": "salamat", "confidence": 1.0, "test": True}
+        event = {"type": "gesture", "label": "salamat", "text": "salamat", "confidence": 1.0, "test": True}
         if self.server:
             self.server.publish(event)
             n = self.server.client_count
@@ -553,17 +555,18 @@ class LaptopActiveView(ttk.Frame):
     def _on_mirror_event(self, e):
         t = e.get("type")
         if t == "gesture":
-            self.m_subtitle.show(e["label"])
+            text = event_text(e)
+            self.m_subtitle.show(text)
             if e.get("test"):
-                self.m_recent.add(e["label"] + " (test)")
+                self.m_recent.add(text + " (test)")
             else:
-                self.m_recent.add(e["label"], e.get("confidence"))
+                self.m_recent.add(text, e.get("confidence"))
             if self.m_speak.get():
-                self.app.speaker.say(e["label"])
+                self.app.speaker.say(text)
         elif t == "status":
             self.m_hands.update_status(e)
         elif t == "started":
-            words = ", ".join(e.get("labels", [])) or "no model"
+            words = ", ".join(e.get("texts") or e.get("labels", [])) or "no model"
             self.m_state.configure(text=f"Pi is recognizing. Words: {words}", foreground=OK)
         elif t == "stopped":
             self.m_state.configure(text="Pi stopped recognition (still connected).", foreground=MUTED)

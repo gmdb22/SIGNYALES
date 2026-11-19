@@ -28,7 +28,7 @@ from tkinter import font as tkfont
 from core import mirror
 from core.display import friendly_error
 from core.env import PI_SIDE, receiver_link
-from core.live import LivePipeline, link_stats_text, load_classifier, make_source
+from core.live import LivePipeline, event_text, link_stats_text, load_classifier, make_source
 from widgets import PANEL_BG, PANEL_FG, SubtitlePanel
 
 RETRY_S = 5           # seconds between reconnect attempts after an error
@@ -164,11 +164,12 @@ class KioskView(tk.Frame):
                 else:
                     self._set_glove(hand, RED, f"{hand.title()} glove: not heard")
         elif t == "gesture":
-            self.subtitle.show(e["label"])
-            self._recent = ([e["label"]] + self._recent)[:6]
+            text = event_text(e)
+            self.subtitle.show(text)
+            self._recent = ([text] + self._recent)[:6]
             self.recent.configure(text="Recent:  " + "   ·   ".join(self._recent))
             if self.speak:
-                self.app.speaker.say(e["label"])
+                self.app.speaker.say(text)
         elif t == "error":
             self._error = e["message"]
         elif t == "stopped":

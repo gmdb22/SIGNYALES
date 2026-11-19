@@ -24,6 +24,9 @@ training pipeline — see Jupyter Notebook training scripts):
     scaler.json    - {"mean": [24 floats], "std": [24 floats]}, computed
                      on the SAME training data the model was fit on.
                      Must use the exact feature order in config.py.
+    display_names.json (optional) - {"label": "text to show and speak"},
+                     e.g. {"im-fine": "I'm fine"}. Without it the text comes
+                     from the label itself (see label_text.py).
 """
 
 import json
@@ -31,6 +34,8 @@ import logging
 from pathlib import Path
 
 import numpy as np
+
+from .label_text import label_to_text, load_display_names
 
 log = logging.getLogger("signyales.model_runtime")
 
@@ -49,6 +54,7 @@ class GestureClassifier:
         self.available = False
         self.interpreter = None
         self.labels = []
+        self.display_names = {}
         self.mean = None
         self.std = None
         self.input_details = None
@@ -95,6 +101,7 @@ class GestureClassifier:
         self.std[self.std == 0] = 1.0
 
         self._check_compatibility()
+        self.display_names = load_display_names(self.model_dir)
 
     def _check_compatibility(self):
         """
@@ -124,6 +131,10 @@ class GestureClassifier:
             raise ValueError(
                 f"scaler.json has {self.mean.size} mean / {self.std.size} std values, "
                 f"model expects {features} features (files from different training runs?)")
+
+    def display_text(self, label) -> str:
+        """The words to show and speak for a label (label_text.py)."""
+        return label_to_text(label, self.display_names)
 
     @staticmethod
     def _get_interpreter_class():

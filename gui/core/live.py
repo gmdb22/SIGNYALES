@@ -21,6 +21,7 @@ ensure_pi_side_on_path()
 
 from signyales_hub.config import HubConfig  # noqa: E402
 from signyales_hub.gesture_debounce import GestureDebouncer  # noqa: E402
+from signyales_hub.label_text import label_to_text  # noqa: E402
 from signyales_hub.windowing import WindowBuffer, extract_features  # noqa: E402
 
 STATUS_EVERY_S = 0.5
@@ -82,6 +83,13 @@ class LinkStats:
         return round(100.0 * (self.expected - self.lost) / self.expected, 1) if self.expected else 0.0
 
 
+def event_text(e) -> str:
+    """The words to show and speak for a gesture event. A Pi with this
+    version sends them as "text"; for an older Pi (mirror) or a test event
+    they are made from the label here."""
+    return e.get("text") or label_to_text(e.get("label"))
+
+
 def load_classifier(model_dir):
     """GestureClassifier with the hub's config checks, or None if no folder given."""
     if not model_dir:
@@ -95,13 +103,15 @@ def load_classifier(model_dir):
 class LivePipeline:
     """
     on_event(dict) receives:
-      {"type": "started", "model": bool, "labels": [...], "link": "usb"/"uart"/"", "port": str}
+      {"type": "started", "model": bool, "labels": [...], "texts": [...], "link": "usb"/"uart"/"",
+       "port": str}
       {"type": "status", "frames", "fps", "left_fresh_pct", "right_fresh_pct",
        "left_flex", "right_flex", "left_valid", "right_valid",
        "left_received_pct", "left_lost", "right_received_pct", "right_lost",
        "receiver": the receiver's own [stats] dict (USB link) or None}
       {"type": "prediction", "label", "confidence"}        every inference
-      {"type": "gesture", "label", "confidence"}           a confirmed sign
+      {"type": "gesture", "label", "text", "confidence"}   a confirmed sign; text is what
+                                                           to show and speak (label_text.py)
       {"type": "stopped", "reason"} / {"type": "error", "message"}
     Frame listeners (add_frame_listener) get (frame, features) for every
     usable frame; the GUI recorder uses this.
@@ -174,8 +184,10 @@ class LivePipeline:
             return
         cfg = self.cfg
         has_model = bool(classifier is not None and classifier.available)
+        to_text = getattr(classifier, "display_text", None) or label_to_text
+        labels = list(classifier.labels) if has_model else []
         self._emit({"type": "started", "model": has_model,
-                    "labels": list(classifier.labels) if has_model else [],
+                    "labels": labels, "texts": [to_text(lb) for lb in labels],
                     "link": getattr(self._source, "link", "") or "",
                     "port": getattr(self._source, "port", "") or ""})
         debouncer = GestureDebouncer(cfg.debounce_required_consecutive, cfg.confidence_threshold,
@@ -239,7 +251,8 @@ class LivePipeline:
                 self._emit({"type": "prediction", "label": label, "confidence": round(confidence, 3)})
                 stable = debouncer.update(label, confidence)
                 if stable:
-                    self._emit({"type": "gesture", "label": stable, "confidence": round(confidence, 3)})
+                    self._emit({"type": "gesture", "label": stable, "text": to_text(stable),
+                                "confidence": round(confidence, 3)})
         except Exception as exc:
             if not self._stop.is_set():
                 self._emit({"type": "error", "message": str(exc)})
