@@ -35,9 +35,20 @@ from signyales_hub.config import HubConfig  # noqa: E402
 from signyales_hub.label_text import (LABEL_RE, label_to_text, read_word_text,  # noqa: E402,F401
                                       save_word_text, word_to_label)
 
-# Offered in the Record tab's word box (19 Nov 2026: one right glove, the FSL
-# alphabet plus one-handed words still being chosen; any word can be typed).
+# Offered in the Record tab's word box (vocabulary of 24 Nov 2026: one right
+# glove; words, the FSL alphabet and the numbers 1-10). Any other word can
+# still be typed. Each entry is the text shown and spoken; word_to_label()
+# makes its folder name. "Good morning" and "Magandang umaga" are one sign,
+# so one class (a comma, not "/", so espeak-ng pauses instead of saying "slash").
+FSL_WORDS = [
+    "Good morning, Magandang umaga", "Good noon", "Good afternoon", "Good evening",
+    "Mahal kita", "Sobrang mahal kita", "Gusto kita", "Ayaw ko sayo",
+    "Mama", "Papa", "Ate", "Kuya", "Lolo", "Lola",
+    "Sino", "Magkano", "Ilan", "Bakit", "Kailan", "Kanino", "Maaraw", "Salamat", "Gutom",
+]
 FSL_ALPHABET = [chr(c) for c in range(ord("A"), ord("Z") + 1)] + ["Ñ", "NG"]
+FSL_NUMBERS = [str(n) for n in range(1, 11)]
+VOCABULARY = FSL_WORDS + FSL_ALPHABET + FSL_NUMBERS + ["rest"]
 
 
 def _load_resample():

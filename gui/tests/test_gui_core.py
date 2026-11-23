@@ -188,6 +188,14 @@ with tempfile.TemporaryDirectory() as tmp:
           recorder.recorded_words(sess) == ["A", "I'm fine", "rest"], recorder.recorded_words(sess))
     check("recorder: alphabet offered has 28 letters incl. Ñ and NG",
           len(recorder.FSL_ALPHABET) == 28 and recorder.FSL_ALPHABET[-2:] == ["Ñ", "NG"])
+    vocab_labels = [recorder.word_to_label(w) for w in recorder.VOCABULARY]
+    check("recorder: vocabulary = 23 words + 28 letters + 1-10 + rest, every entry a valid, unique folder",
+          len(recorder.FSL_WORDS) == 23 and recorder.FSL_NUMBERS == [str(n) for n in range(1, 11)]
+          and len(recorder.VOCABULARY) == 62 and None not in vocab_labels
+          and len(set(vocab_labels)) == len(vocab_labels), vocab_labels)
+    check("recorder: numbers and Filipino words get plain folder names",
+          [recorder.word_to_label(w) for w in ("10", "Ayaw ko sayo", "Good morning, Magandang umaga")]
+          == ["10", "ayaw-ko-sayo", "good-morning-magandang-umaga"])
     check("recorder: fixed-length by default, one rep = the model window (D1)",
           rec.fixed_length and rec.target_frames == W)
     rec.start_rep()

@@ -314,7 +314,7 @@ class PiActiveView(ttk.Frame):
         word = ttk.Frame(tab)
         word.pack(fill="x", pady=8)
         ttk.Label(word, text="2. Word:", font=("Segoe UI", 11, "bold")).pack(side="left")
-        self.k_word = ttk.Combobox(word, values=recorder.FSL_ALPHABET + ["rest"], width=24,
+        self.k_word = ttk.Combobox(word, values=recorder.VOCABULARY, width=30, height=20,
                                    font=("Segoe UI", 12), postcommand=self._refresh_word_list)
         self.k_word.set("A")
         self.k_word.pack(side="left", padx=6)
@@ -327,8 +327,9 @@ class PiActiveView(ttk.Frame):
         self.k_count = ttk.Label(word, text="", font=("Segoe UI", 11))
         self.k_count.pack(side="left", padx=12)
         ttk.Label(tab, text="Type the word, letter or phrase exactly as it should appear and be "
-                            "spoken (e.g. A, Ñ, I'm fine). Pick 'rest' for the hand doing nothing. "
-                            "The list shows the alphabet and the words already recorded here.",
+                            "spoken (e.g. A, Ñ, Salamat). Pick 'rest' for the hand doing nothing. "
+                            "The list shows the words already recorded here first, then the rest "
+                            "of the vocabulary: words, the alphabet and 1-10.",
                   foreground=MUTED, wraplength=900).pack(anchor="w")
 
         self.k_button = tk.Button(tab, text="3. START repetition  (Space)", font=("Segoe UI", 16, "bold"),
@@ -405,7 +406,7 @@ class PiActiveView(ttk.Frame):
 
     def _refresh_word_list(self):
         done = recorder.recorded_words(self._out_dir())
-        rest = [w for w in recorder.FSL_ALPHABET + ["rest"] if w not in done]
+        rest = [w for w in recorder.VOCABULARY if w not in done]
         self.k_word.configure(values=done + rest)
 
     def _update_counts(self):
